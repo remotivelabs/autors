@@ -1,0 +1,24 @@
+# Rust build output and local Cargo configuration
+/target/
+/.cargo/
+*.rs.bk
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs, temporary files, and coverage output
+*.log
+*.tmp
+*.profraw
+/coverage/
