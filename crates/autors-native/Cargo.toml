@@ -1,0 +1,11 @@
+[package]
+name = "autors-native"
+description = "Native dynamic-library loading and Seed & Key integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+libloading.workspace = true
