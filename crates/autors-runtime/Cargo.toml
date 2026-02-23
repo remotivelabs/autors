@@ -1,0 +1,22 @@
+[package]
+name = "autors-runtime"
+description = "Async runtime abstraction: tokio-backed or std-fallback primitives plus a blocking facade driver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["runtime-tokio", "blocking"]
+# Back the primitives with tokio. Without this feature a plain std::thread
+# fallback is used so dependent crates still compile and run.
+runtime-tokio = ["dep:tokio"]
+# Enable `block_on`, which drives futures synchronously and powers the
+# `blocking` facade modules of the I/O crates.
+blocking = []
+
+[dependencies]
+tokio = { workspace = true, optional = true, features = ["rt", "rt-multi-thread", "time", "sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
