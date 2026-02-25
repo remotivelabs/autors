@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/autors-util",
+    "crates/autors-native",
+    "crates/autors-runtime",
 ]
 
 [workspace.package]
@@ -10,6 +13,9 @@ license = "proprietary"
 publish = false
 
 [workspace.dependencies]
+autors-util = { path = "crates/autors-util" }
+autors-native = { path = "crates/autors-native" }
+autors-runtime = { path = "crates/autors-runtime", default-features = false }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
