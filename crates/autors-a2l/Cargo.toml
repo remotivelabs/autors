@@ -1,0 +1,11 @@
+[package]
+name = "autors-a2l"
+description = "A2L (ASAM MCD-2 MC) object model with file parsing and writing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+indexmap.workspace = true
