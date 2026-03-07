@@ -1,0 +1,175 @@
+/*
+   Written by  v
+   2026/7/31 11:29 
+   Original file: golden_input.a2l
+*/
+
+ASAP2_VERSION 1 71
+/begin PROJECT GoldenProj	"golden round-trip sample"
+
+	/begin HEADER
+		"sample header"
+		VERSION "1.71"
+		PROJECT_NO 7
+	/end HEADER
+
+	/begin MODULE MOD1
+		"golden module"
+
+		/begin MOD_COMMON
+			"common section"
+			BYTE_ORDER MSB_LAST
+			DEPOSIT ABSOLUTE
+			DATA_SIZE 64
+			ALIGNMENT_BYTE 1
+			ALIGNMENT_WORD 2
+			ALIGNMENT_LONG 4
+			ALIGNMENT_FLOAT32_IEEE 4
+			ALIGNMENT_FLOAT64_IEEE 4
+			ALIGNMENT_INT64 8
+			ALIGNMENT_FLOAT16_IEEE 2
+		/end MOD_COMMON
+
+		/begin RECORD_LAYOUT RL_VAL
+			FNC_VALUES 1 UBYTE ROW_DIR DIRECT
+		/end RECORD_LAYOUT
+
+		/begin RECORD_LAYOUT RL_MAP
+			FNC_VALUES 2 UWORD ROW_DIR DIRECT
+			AXIS_PTS_X 3 UBYTE INDEX_INCR DIRECT
+			SRC_ADDR_X 4 UBYTE
+		/end RECORD_LAYOUT
+
+		/begin COMPU_METHOD CONV_LIN
+			"linear"
+			LINEAR
+			"COEFFS" "0"
+			COEFFS_LINEAR 1 0
+		/end COMPU_METHOD
+
+		/begin COMPU_METHOD CONV_FORM
+			"formula"
+			FORM
+			"" ""
+			/begin FORMULA
+				"X1*2+3"
+			/end FORMULA
+		/end COMPU_METHOD
+
+		/begin COMPU_TAB CONV_TAB
+			"table"
+			TAB_INTP
+			3
+			0 0
+			1 10.5
+			2 20
+			DEFAULT_VALUE_NUMERIC 99
+		/end COMPU_TAB
+
+		/begin COMPU_VTAB CONV_VTAB
+			"verbal"
+			TAB_VERB
+			2
+			0 "OFF"
+			1 "ON"
+			DEFAULT_VALUE "UNKNOWN"
+		/end COMPU_VTAB
+
+		/begin MEASUREMENT EngineSpeed
+			"engine speed"
+			UWORD
+			CONV_LIN
+			1 0
+			0 8000
+			MAX_REFRESH 1 10
+			FORMAT "%5.0"
+			ECU_ADDRESS 0x1000
+			READ_WRITE
+			/begin ANNOTATION
+				ANNOTATION_ORIGIN "org"
+				ANNOTATION_LABEL "lbl"
+			/end ANNOTATION
+		/end MEASUREMENT
+
+		/begin AXIS_PTS AxpRpm
+			"rpm axis"
+			0x2000
+			EngineSpeed
+			RL_VAL
+			0
+			CONV_LIN
+			16
+			0 8000
+			MONOTONY MON_INCREASE
+			DEPOSIT ABSOLUTE
+		/end AXIS_PTS
+
+		/begin CHARACTERISTIC KfMap
+			"friction map"
+			MAP
+			0x803DAC
+			RL_MAP
+			0
+			CONV_LIN
+			0 100
+			EXTENDED_LIMITS -10 200
+			GUARD_RAILS
+			/begin AXIS_DESCR
+				STD_AXIS
+				EngineSpeed
+				CONV_LIN
+				16
+				0 8000
+			/end AXIS_DESCR
+		/end CHARACTERISTIC
+
+		/begin CHARACTERISTIC KpGain
+			"gain"
+			VALUE
+			0x4000
+			RL_VAL
+			0
+			CONV_LIN
+			0 255
+			READ_ONLY
+			STEP_SIZE 0.5
+		/end CHARACTERISTIC
+
+		/begin UNIT UnitNm
+			"newton meter"
+			"Nm"
+			EXTENDED_SI
+		/end UNIT
+
+		/begin FUNCTION FncEngine
+			"engine functions"
+			FUNCTION_VERSION "1.0"
+			/begin DEF_CHARACTERISTIC
+				KpGain KfMap
+			/end DEF_CHARACTERISTIC
+			/begin REF_MEASUREMENT
+				EngineSpeed
+			/end REF_MEASUREMENT
+		/end FUNCTION
+
+		/begin GROUP GrpMain
+			"main group"
+			ROOT
+			/begin REF_CHARACTERISTIC
+				KpGain KfMap
+			/end REF_CHARACTERISTIC
+			/begin REF_MEASUREMENT
+				EngineSpeed
+			/end REF_MEASUREMENT
+		/end GROUP
+
+		/begin VARIANT_CODING
+			/begin VAR_CRITERION VarA
+				"criterion A"
+				/begin VAR_ADDRESS
+					0x5000
+				/end VAR_ADDRESS
+			/end VAR_CRITERION
+		/end VARIANT_CODING
+	/end MODULE
+/end PROJECT
