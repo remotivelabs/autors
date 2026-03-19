@@ -1,0 +1,166 @@
+use autors_ldf::codec::SignalValues;
+use autors_ldf::model::{EncodingValue, Ldf, ScheduleCommand, SignalValue};
+
+const SAMPLE: &str = r#"
+// compact integration fixture
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+Channel_name = "LIN1";
+
+Nodes {
+    Master: Master, 5 ms, 0.1 ms;
+    Slaves: Slave;
+}
+
+Signals {
+    Speed: 8, 0, Slave, Master;
+    Error: 1, 0, Slave, Master;
+    CommandValue: 8, 7, Master, Slave;
+}
+
+Diagnostic_signals {
+    Req: 8, 0;
+    Resp: 8, 0;
+}
+
+Frames {
+    Status: 1, Slave, 2 {
+        Speed, 0;
+        Error, 8;
+    }
+    Command: 3, Master, 1 {
+        CommandValue, 0;
+    }
+}
+
+Sporadic_frames {
+    Burst: Command;
+}
+
+Event_triggered_frames {
+    StatusEvent: Collision, 2, Status;
+}
+
+Diagnostic_frames {
+    MasterReq: 60 { Req, 0; }
+    SlaveResp: 61 { Resp, 0; }
+}
+
+Node_attributes {
+    Slave {
+        LIN_protocol = "2.2";
+        configured_NAD = 1;
+        product_id = 1, 2, 3;
+        response_error = Error;
+        fault_state_signals = Error;
+        configurable_frames {
+            Status;
+            Command;
+            StatusEvent;
+        }
+    }
+}
+
+Schedule_tables {
+    Main {
+        Command delay 10 ms;
+        StatusEvent delay 20 ms;
+        MasterReq delay 10 ms;
+        SlaveResp delay 10 ms;
+    }
+    Collision {
+        Status delay 10 ms;
+    }
+    Configuration {
+        AssignNAD { Slave } delay 10 ms;
+        ConditionalChangeNAD { 127, 1, 3, 1, 255, 1 } delay 10 ms;
+        DataDump { Slave, 1, 2, 3, 4, 5 } delay 10 ms;
+        SaveConfiguration { Slave } delay 10 ms;
+        AssignFrameIdRange { Slave, 0, 64, 66, 255, 255 } delay 10 ms;
+        AssignFrameId { Slave, Status } delay 10 ms;
+        UnassignFrameId { Slave, Status } delay 10 ms;
+        FreeFormat { 60, 178, 0, 0, 255, 127, 255, 255 } delay 10 ms;
+    }
+}
+
+Signal_groups {
+    StatusGroup: 9 {
+        Speed, 0;
+        Error, 8;
+    }
+}
+
+Signal_encoding_types {
+    SpeedType {
+        physical_value, 0, 254, 2, 0, "rpm";
+        logical_value, 255, "invalid";
+    }
+    ErrorType {
+        logical_value, 0, "ok";
+        logical_value, 1, "fault";
+    }
+}
+
+Signal_representation {
+    SpeedType: Speed;
+    ErrorType: Error;
+}
+"#;
+
+#[test]
+fn parses_model_and_round_trips_without_loss() {
+    let first = Ldf::parse_str(SAMPLE).unwrap();
+    assert_eq!(first.baud_rate, 19_200);
+    assert_eq!(first.channel_name.as_deref(), Some("LIN1"));
+    assert_eq!(first.master.name, "Master");
+    assert_eq!(first.slaves["Slave"].configured_nad, Some(1));
+    assert_eq!(first.unconditional_frames["Status"].length, 2);
+    assert_eq!(first.signal_groups["StatusGroup"].size, 9);
+    assert!(matches!(
+        first.schedule_tables["Configuration"].entries[4].command,
+        ScheduleCommand::AssignFrameIdRange {
+            protected_ids: Some([64, 66, 255, 255]),
+            ..
+        }
+    ));
+    assert!(matches!(
+        first.signal_encoding_types["SpeedType"].values[0],
+        EncodingValue::Physical { .. }
+    ));
+    assert_eq!(first.comments, ["// compact integration fixture"]);
+
+    let serialized = first.write_string().unwrap();
+    let second = Ldf::parse_str(&serialized).unwrap();
+    assert_eq!(first, second);
+}
+
+#[test]
+fn parsed_encodings_drive_frame_codec() {
+    let ldf = Ldf::parse_str(SAMPLE).unwrap();
+    let mut values = SignalValues::new();
+    values.insert("Speed".to_string(), SignalValue::Text("100rpm".to_string()));
+    values.insert("Error".to_string(), SignalValue::Text("fault".to_string()));
+    let payload = ldf.encode_frame("Status", &values).unwrap();
+    assert_eq!(payload, [50, 1]);
+
+    let decoded = ldf.decode_frame("Status", &payload, true).unwrap();
+    assert_eq!(
+        decoded["Speed"],
+        SignalValue::Text("100.000 rpm".to_string())
+    );
+    assert_eq!(decoded["Error"], SignalValue::Text("fault".to_string()));
+}
+
+#[test]
+fn rejects_cross_reference_and_layout_errors() {
+    let missing_node = SAMPLE.replace(
+        "Speed: 8, 0, Slave, Master;",
+        "Speed: 8, 0, Missing, Master;",
+    );
+    assert!(Ldf::parse_str(&missing_node).is_err());
+
+    let overlap = SAMPLE.replace("Error, 8;", "Error, 7;");
+    assert!(Ldf::parse_str(&overlap).is_err());
+}
