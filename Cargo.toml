@@ -4,6 +4,11 @@ members = [
     "crates/autors-util",
     "crates/autors-native",
     "crates/autors-runtime",
+    "crates/autors-a2l",
+    "crates/autors-cdf",
+    "crates/autors-dbc",
+    "crates/autors-ldf",
+    "crates/autors-odx",
 ]
 
 [workspace.package]
@@ -16,6 +21,11 @@ publish = false
 autors-util = { path = "crates/autors-util" }
 autors-native = { path = "crates/autors-native" }
 autors-runtime = { path = "crates/autors-runtime", default-features = false }
+autors-a2l = { path = "crates/autors-a2l" }
+autors-cdf = { path = "crates/autors-cdf" }
+autors-dbc = { path = "crates/autors-dbc" }
+autors-ldf = { path = "crates/autors-ldf" }
+autors-odx = { path = "crates/autors-odx" }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
