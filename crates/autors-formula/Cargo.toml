@@ -1,0 +1,12 @@
+[package]
+name = "autors-formula"
+description = "A2L COMPU_METHOD evaluation and checksum algorithms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
