@@ -1,0 +1,11 @@
+[package]
+name = "autors-datafile"
+description = "Sparse firmware-image editing and conversion (HEX, S-record, VBF, TI-TXT, UF2, BIN)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+thiserror.workspace = true
