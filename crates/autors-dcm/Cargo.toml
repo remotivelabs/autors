@@ -1,0 +1,13 @@
+[package]
+name = "autors-dcm"
+description = "Calibration data conservation file formats: DCM (Data Conservation/Konservierungsformat), MATLAB .m, and CANape PAR"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+autors-formula.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
