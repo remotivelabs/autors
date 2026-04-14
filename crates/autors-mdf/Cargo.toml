@@ -1,0 +1,16 @@
+[package]
+name = "autors-mdf"
+description = "Reading and writing of MDF (ASAM Measurement Data Format) V3/V4 measurement files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+autors-formula.workspace = true
+autors-util.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+byteorder.workspace = true
+flate2.workspace = true
