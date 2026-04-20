@@ -1,0 +1,15 @@
+[package]
+name = "autors-symbols"
+description = "Symbol-to-A2L address update integration (shared update types and write-back)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+thiserror.workspace = true
+
+[[bench]]
+name = "address_resolution"
+harness = false
