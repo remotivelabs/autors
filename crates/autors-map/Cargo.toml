@@ -1,0 +1,17 @@
+[package]
+name = "autors-map"
+description = "Linker MAP file symbol parsing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+autors-symbols.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+
+[[bench]]
+name = "map_parsing"
+harness = false
