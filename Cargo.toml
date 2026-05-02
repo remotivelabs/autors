@@ -13,6 +13,9 @@ members = [
     "crates/autors-ldf",
     "crates/autors-odx",
     "crates/autors-mdf",
+    "crates/autors-symbols",
+    "crates/autors-elf",
+    "crates/autors-map",
 ]
 
 [workspace.package]
@@ -34,6 +37,9 @@ autors-dbc = { path = "crates/autors-dbc" }
 autors-ldf = { path = "crates/autors-ldf" }
 autors-odx = { path = "crates/autors-odx" }
 autors-mdf = { path = "crates/autors-mdf" }
+autors-symbols = { path = "crates/autors-symbols" }
+autors-elf = { path = "crates/autors-elf" }
+autors-map = { path = "crates/autors-map" }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
