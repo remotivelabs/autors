@@ -1,0 +1,15 @@
+[package]
+name = "autors-values"
+description = "A2L calibration value objects (runtime values of CHARACTERISTICs)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-a2l.workspace = true
+autors-cdf.workspace = true
+autors-datafile.workspace = true
+autors-formula.workspace = true
+autors-util.workspace = true
+thiserror.workspace = true
