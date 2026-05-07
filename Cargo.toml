@@ -6,6 +6,7 @@ members = [
     "crates/autors-runtime",
     "crates/autors-a2l",
     "crates/autors-formula",
+    "crates/autors-values",
     "crates/autors-cdf",
     "crates/autors-dcm",
     "crates/autors-datafile",
@@ -30,6 +31,7 @@ autors-native = { path = "crates/autors-native" }
 autors-runtime = { path = "crates/autors-runtime", default-features = false }
 autors-a2l = { path = "crates/autors-a2l" }
 autors-formula = { path = "crates/autors-formula" }
+autors-values = { path = "crates/autors-values" }
 autors-cdf = { path = "crates/autors-cdf" }
 autors-dcm = { path = "crates/autors-dcm" }
 autors-datafile = { path = "crates/autors-datafile" }
