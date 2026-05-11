@@ -1,0 +1,66 @@
+[package]
+name = "autors-can"
+description = "Cross-platform CAN abstraction with optional vendor backends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["runtime-tokio", "blocking", "socketcan"]
+runtime-tokio = ["autors-runtime/runtime-tokio"]
+blocking = ["autors-runtime/blocking"]
+# Enable the target-gated Linux SocketCAN backend by default.
+socketcan = ["dep:socketcan"]
+# Vendor adapters are opt-in; `all-vendors` enables all 17 adapters.
+all-vendors = [
+    "vendor-advantech",
+    "vendor-can-analyst",
+    "vendor-eb-el",
+    "vendor-8devices",
+    "vendor-elm327",
+    "vendor-esd",
+    "vendor-etas",
+    "vendor-ime-actia",
+    "vendor-intrepid",
+    "vendor-ixxat",
+    "vendor-kvaser",
+    "vendor-lawicel",
+    "vendor-mhs",
+    "vendor-ni",
+    "vendor-peak",
+    "vendor-tosun",
+    "vendor-vector",
+]
+vendor-advantech = ["dep:libloading"]
+vendor-can-analyst = ["dep:libloading"]
+vendor-eb-el = ["dep:libloading"]
+vendor-8devices = ["dep:libloading"]
+vendor-elm327 = ["dep:serialport"]
+vendor-esd = ["dep:libloading"]
+vendor-etas = ["dep:libloading"]
+vendor-ime-actia = ["dep:libloading"]
+vendor-intrepid = ["dep:libloading"]
+vendor-ixxat = ["dep:libloading"]
+vendor-kvaser = ["dep:libloading"]
+vendor-lawicel = ["dep:libloading"]
+vendor-mhs = ["dep:libloading"]
+vendor-ni = ["dep:libloading"]
+vendor-peak = ["dep:libloading"]
+vendor-tosun = ["dep:libloading"]
+vendor-vector = ["dep:libloading"]
+
+[dependencies]
+autors-native.workspace = true
+autors-runtime.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+libloading = { workspace = true, optional = true }
+serialport = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
