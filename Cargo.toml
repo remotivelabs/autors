@@ -17,6 +17,8 @@ members = [
     "crates/autors-symbols",
     "crates/autors-elf",
     "crates/autors-map",
+    "crates/autors-lin",
+    "crates/autors-can",
 ]
 
 [workspace.package]
@@ -42,6 +44,8 @@ autors-mdf = { path = "crates/autors-mdf" }
 autors-symbols = { path = "crates/autors-symbols" }
 autors-elf = { path = "crates/autors-elf" }
 autors-map = { path = "crates/autors-map" }
+autors-lin = { path = "crates/autors-lin", default-features = false }
+autors-can = { path = "crates/autors-can", default-features = false }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
