@@ -1,0 +1,11 @@
+[package]
+name = "autors-asc"
+description = "Reading and writing Vector ASC CAN and CAN FD trace files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-can.workspace = true
+thiserror.workspace = true
