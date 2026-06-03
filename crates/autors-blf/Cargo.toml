@@ -1,0 +1,13 @@
+[package]
+name = "autors-blf"
+description = "Reading and writing Vector BLF (Binary Logging Format) files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-can.workspace = true
+autors-lin.workspace = true
+thiserror.workspace = true
+flate2.workspace = true
