@@ -12,6 +12,9 @@ members = [
     "crates/autors-datafile",
     "crates/autors-dbc",
     "crates/autors-ldf",
+    "crates/autors-asc",
+    "crates/autors-blf",
+    "crates/autors-ltrc",
     "crates/autors-odx",
     "crates/autors-mdf",
     "crates/autors-symbols",
@@ -39,6 +42,9 @@ autors-dcm = { path = "crates/autors-dcm" }
 autors-datafile = { path = "crates/autors-datafile" }
 autors-dbc = { path = "crates/autors-dbc" }
 autors-ldf = { path = "crates/autors-ldf" }
+autors-asc = { path = "crates/autors-asc" }
+autors-blf = { path = "crates/autors-blf" }
+autors-ltrc = { path = "crates/autors-ltrc" }
 autors-odx = { path = "crates/autors-odx" }
 autors-mdf = { path = "crates/autors-mdf" }
 autors-symbols = { path = "crates/autors-symbols" }

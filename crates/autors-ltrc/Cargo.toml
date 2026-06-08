@@ -1,0 +1,11 @@
+[package]
+name = "autors-ltrc"
+description = "Reading PEAK PLIN-View Pro LTRC LIN trace files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+autors-lin.workspace = true
+thiserror.workspace = true
