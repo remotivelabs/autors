@@ -22,6 +22,7 @@ members = [
     "crates/autors-map",
     "crates/autors-lin",
     "crates/autors-can",
+    "crates/autors-scheduler",
 ]
 
 [workspace.package]
@@ -52,6 +53,7 @@ autors-elf = { path = "crates/autors-elf" }
 autors-map = { path = "crates/autors-map" }
 autors-lin = { path = "crates/autors-lin", default-features = false }
 autors-can = { path = "crates/autors-can", default-features = false }
+autors-scheduler = { path = "crates/autors-scheduler", default-features = false }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
