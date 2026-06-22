@@ -15,11 +15,13 @@ members = [
     "crates/autors-asc",
     "crates/autors-blf",
     "crates/autors-ltrc",
+    "crates/autors-isotp",
     "crates/autors-odx",
     "crates/autors-mdf",
     "crates/autors-symbols",
     "crates/autors-elf",
     "crates/autors-map",
+    "crates/autors-comm",
     "crates/autors-lin",
     "crates/autors-can",
     "crates/autors-scheduler",
@@ -46,11 +48,13 @@ autors-ldf = { path = "crates/autors-ldf" }
 autors-asc = { path = "crates/autors-asc" }
 autors-blf = { path = "crates/autors-blf" }
 autors-ltrc = { path = "crates/autors-ltrc" }
+autors-isotp = { path = "crates/autors-isotp", default-features = false }
 autors-odx = { path = "crates/autors-odx" }
 autors-mdf = { path = "crates/autors-mdf" }
 autors-symbols = { path = "crates/autors-symbols" }
 autors-elf = { path = "crates/autors-elf" }
 autors-map = { path = "crates/autors-map" }
+autors-comm = { path = "crates/autors-comm", default-features = false }
 autors-lin = { path = "crates/autors-lin", default-features = false }
 autors-can = { path = "crates/autors-can", default-features = false }
 autors-scheduler = { path = "crates/autors-scheduler", default-features = false }
