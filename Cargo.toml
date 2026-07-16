@@ -17,11 +17,15 @@ members = [
     "crates/autors-ltrc",
     "crates/autors-isotp",
     "crates/autors-odx",
+    "crates/autors-prm",
+    "crates/autors-diag",
     "crates/autors-mdf",
     "crates/autors-symbols",
     "crates/autors-elf",
     "crates/autors-map",
     "crates/autors-comm",
+    "crates/autors-ccp",
+    "crates/autors-xcp",
     "crates/autors-lin",
     "crates/autors-can",
     "crates/autors-scheduler",
@@ -50,11 +54,15 @@ autors-blf = { path = "crates/autors-blf" }
 autors-ltrc = { path = "crates/autors-ltrc" }
 autors-isotp = { path = "crates/autors-isotp", default-features = false }
 autors-odx = { path = "crates/autors-odx" }
+autors-prm = { path = "crates/autors-prm", default-features = false }
+autors-diag = { path = "crates/autors-diag", default-features = false }
 autors-mdf = { path = "crates/autors-mdf" }
 autors-symbols = { path = "crates/autors-symbols" }
 autors-elf = { path = "crates/autors-elf" }
 autors-map = { path = "crates/autors-map" }
 autors-comm = { path = "crates/autors-comm", default-features = false }
+autors-ccp = { path = "crates/autors-ccp", default-features = false }
+autors-xcp = { path = "crates/autors-xcp", default-features = false }
 autors-lin = { path = "crates/autors-lin", default-features = false }
 autors-can = { path = "crates/autors-can", default-features = false }
 autors-scheduler = { path = "crates/autors-scheduler", default-features = false }
