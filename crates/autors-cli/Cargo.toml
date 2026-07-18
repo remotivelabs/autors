@@ -1,0 +1,51 @@
+[package]
+name = "autors-cli"
+description = "CANoe-inspired terminal workbench for the autors crate family"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "autors-cli"
+path = "src/main.rs"
+
+[features]
+default = []
+# Native Windows drivers are loaded at runtime. Keeping them opt-in means the
+# normal build remains usable on machines that do not have vendor DLLs.
+hardware-vector = ["autors-can/vendor-vector", "autors-lin/vendor-vector"]
+hardware-kvaser = ["autors-can/vendor-kvaser", "autors-lin/vendor-kvaser"]
+hardware-peak = ["autors-can/vendor-peak", "autors-lin/vendor-peak"]
+hardware-all = ["hardware-vector", "hardware-kvaser", "hardware-peak"]
+
+[dependencies]
+autors-a2l.workspace = true
+autors-asc.workspace = true
+autors-blf.workspace = true
+autors-can.workspace = true
+autors-ccp.workspace = true
+autors-cdf.workspace = true
+autors-comm.workspace = true
+autors-dbc.workspace = true
+autors-dcm.workspace = true
+autors-datafile.workspace = true
+autors-diag.workspace = true
+autors-elf.workspace = true
+autors-isotp.workspace = true
+autors-ldf.workspace = true
+autors-lin.workspace = true
+autors-ltrc.workspace = true
+autors-mdf.workspace = true
+autors-map.workspace = true
+autors-odx.workspace = true
+autors-prm.workspace = true
+autors-runtime = { workspace = true, features = ["blocking"] }
+autors-scheduler.workspace = true
+autors-symbols.workspace = true
+autors-xcp.workspace = true
+autors-values.workspace = true
+async-trait.workspace = true
+cargo_metadata = "0.23.1"
+crossterm = "0.29.0"
+ratatui = "0.30.2"
