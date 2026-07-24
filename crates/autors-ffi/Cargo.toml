@@ -1,0 +1,29 @@
+[package]
+name = "autors-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["runtime-tokio", "blocking"]
+# Feature forwarding kept in the same shape as the other workspace crates.
+# The FFI itself stays synchronous over the pure-sync a2l/values APIs, so
+# autors-runtime is only a forwarding target for now.
+runtime-tokio = ["autors-runtime/runtime-tokio"]
+blocking = ["autors-runtime/blocking"]
+
+[dependencies]
+autors-a2l.workspace = true
+autors-values.workspace = true
+autors-runtime.workspace = true
+
+[build-dependencies]
+cbindgen.workspace = true
+cc.workspace = true
+
+[dev-dependencies]
+cbindgen.workspace = true
