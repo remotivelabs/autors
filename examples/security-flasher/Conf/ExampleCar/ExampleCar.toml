@@ -1,0 +1,33 @@
+# Public demonstration configuration. All identifiers and resources in this
+# directory are examples and must not be used for production programming.
+
+[Vehicle]
+Name = "ExampleCar"
+Description = "Public UDS security flashing plugin example"
+DemoOnly = true
+
+[Flow]
+DllPath = "examplecar_flow.dll"
+
+[Can]
+BaudRate = 500000
+DataBaudRate = 0
+FunctionalRequestId = 0x7DF
+PhysicalRequestId = 0x70E
+ResponseId = 0x78E
+FillByte = 0xCC
+P2ClientMs = 2000
+P3ClientMs = 120000
+TransferBlockSize = 1024
+
+[Loader]
+DllPath = "examplecar_fileloader.dll"
+Mode = "separate"
+
+[SeedKey]
+DllPath = "examplecar_seedkey.dll"
+
+[FlashDriver]
+Path = "FlashDriver.hex"
+Address = 0x20000400
+

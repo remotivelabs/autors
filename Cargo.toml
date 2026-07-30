@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "examples/security-flasher",
     "examples/security-flasher-sdk",
     "examples/security-flasher-plugins/examplecar-fileloader",
     "examples/security-flasher-plugins/examplecar-flow",

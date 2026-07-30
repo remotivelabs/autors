@@ -1,0 +1,346 @@
+import { Button, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+
+component WindowControl inherits Rectangle {
+    in property <string> symbol;
+    in property <bool> danger: false;
+    in property <bool> control-enabled: true;
+    callback invoked();
+
+    width: 46px;
+    height: 42px;
+    background: root.control-enabled && control-area.has-hover
+        ? (root.danger ? #d94151 : #29425f)
+        : #00000000;
+
+    Text {
+        text: root.symbol;
+        color: root.control-enabled ? #eaf2fc : #66788f;
+        font-family: "Segoe UI Symbol";
+        font-size: root.danger ? 21px : 17px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    control-area := TouchArea {
+        enabled: root.control-enabled;
+        mouse-cursor: pointer;
+        clicked => { root.invoked(); }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "autors Security Flasher";
+    width: 1120px;
+    height: 760px;
+    background: #f3f6fb;
+    icon: @image-url("../assets/app-icon.png");
+    no-frame: true;
+    resize-border-width: 6px;
+
+    in property <[string]> config-model;
+    in-out property <int> config-index: -1;
+    in property <[string]> adapter-model;
+    in-out property <int> adapter-index: 0;
+    in property <[string]> device-model;
+    in-out property <int> device-index: -1;
+    in-out property <string> image-path;
+    in property <string> config-name: "No configuration";
+    in property <string> config-description;
+    in property <string> config-summary;
+    in property <string> plugin-summary;
+    in property <string> connection-status: "Disconnected";
+    in property <string> task-status: "Ready";
+    in property <string> log-text;
+    in property <int> progress: 0;
+    in property <bool> busy: false;
+    in property <bool> flashing: false;
+    in property <bool> connected: false;
+
+    callback config-changed(int);
+    callback scan-devices(int);
+    callback connect-requested(int, int, int);
+    callback disconnect-requested();
+    callback browse-image();
+    callback flash-requested(int, string);
+    callback cancel-requested();
+    callback minimize-window();
+    callback close-window();
+    callback start-window-drag();
+    callback drag-window(float, float);
+
+    changed log-text => {
+        log-scroll.viewport-y = min(0px, log-scroll.visible-height - log-content.height);
+    }
+
+    VerticalLayout {
+        spacing: 0px;
+
+        Rectangle {
+            height: 94px;
+            background: #10233f;
+
+            title-drag-area := TouchArea {
+                width: max(0px, parent.width - 338px);
+                height: parent.height;
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.left
+                        && event.kind == PointerEventKind.down) {
+                        root.start-window-drag();
+                    }
+                }
+                moved => {
+                    if (self.pressed) {
+                        root.drag-window(
+                            (self.mouse-x - self.pressed-x) / 1px,
+                            (self.mouse-y - self.pressed-y) / 1px
+                        );
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                padding-left: 28px;
+                padding-right: 28px;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 4px;
+                    Text {
+                        text: "AUTORS  /  SECURITY FLASHER";
+                        color: #ffffff;
+                        font-size: 24px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        text: "Configuration-driven flow, image-loader, and Seed & Key plugins";
+                        color: #a9bdd8;
+                        font-size: 13px;
+                    }
+                }
+            }
+
+            Rectangle {
+                x: parent.width - 138px - 18px - self.width;
+                y: (parent.height - self.height) / 2;
+                width: 164px;
+                height: 34px;
+                border-radius: 17px;
+                background: root.connected ? #194b3d : #402d3b;
+                Text {
+                    text: root.connection-status;
+                    color: root.connected ? #8ff0c5 : #f1b4c8;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    font-size: 12px;
+                }
+            }
+
+            HorizontalLayout {
+                x: parent.width - 138px;
+                y: 0px;
+                width: 138px;
+                height: 42px;
+                spacing: 0px;
+
+                WindowControl {
+                    symbol: "−";
+                    invoked => { root.minimize-window(); }
+                }
+                WindowControl {
+                    symbol: "□";
+                    control-enabled: false;
+                }
+                WindowControl {
+                    symbol: "×";
+                    danger: true;
+                    invoked => { root.close-window(); }
+                }
+            }
+        }
+
+        Rectangle {
+            height: 48px;
+            background: #fff4d7;
+            border-width: 1px;
+            border-color: #ead7a2;
+            Text {
+                x: 22px;
+                width: parent.width - 44px;
+                text: "Bench use only. The bundled ExampleCar resources and algorithms are non-production examples.";
+                color: #76540d;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                font-size: 13px;
+            }
+        }
+
+        HorizontalLayout {
+            padding: 20px;
+            spacing: 18px;
+
+            VerticalLayout {
+                width: 390px;
+                spacing: 14px;
+
+                Rectangle {
+                    background: #ffffff;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #dbe3ef;
+                    VerticalLayout {
+                        padding: 18px;
+                        spacing: 10px;
+                        Text { text: "Configuration"; color: #152b49; font-size: 17px; font-weight: 700; }
+                        ComboBox {
+                            model: root.config-model;
+                            current-index <=> root.config-index;
+                            enabled: !root.busy;
+                            selected(value) => { root.config-changed(self.current-index); }
+                        }
+                        Text { text: root.config-name; color: #1b3354; font-size: 16px; font-weight: 700; }
+                        Text { text: root.config-description; color: #5a6b82; wrap: word-wrap; }
+                        Rectangle { height: 1px; background: #e5eaf2; }
+                        Text { text: root.config-summary; color: #354b68; wrap: word-wrap; font-size: 12px; }
+                        Text { text: root.plugin-summary; color: #60738c; wrap: word-wrap; font-size: 12px; }
+                    }
+                }
+
+                Rectangle {
+                    background: #ffffff;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #dbe3ef;
+                    VerticalLayout {
+                        padding: 18px;
+                        spacing: 10px;
+                        Text { text: "CAN connection"; color: #152b49; font-size: 17px; font-weight: 700; }
+                        Text { text: "Interface"; color: #60738c; font-size: 12px; }
+                        ComboBox {
+                            model: root.adapter-model;
+                            current-index <=> root.adapter-index;
+                            enabled: !root.busy && !root.connected;
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: root.device-model;
+                                current-index <=> root.device-index;
+                                enabled: !root.busy && !root.connected;
+                            }
+                            Button {
+                                text: "Scan";
+                                enabled: !root.busy && !root.connected;
+                                clicked => { root.scan-devices(root.adapter-index); }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "Connect";
+                                horizontal-stretch: 1;
+                                enabled: !root.busy && !root.connected && root.device-index >= 0 && root.config-index >= 0;
+                                clicked => { root.connect-requested(root.config-index, root.adapter-index, root.device-index); }
+                            }
+                            Button {
+                                text: "Disconnect";
+                                horizontal-stretch: 1;
+                                enabled: !root.busy && root.connected;
+                                clicked => { root.disconnect-requested(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 14px;
+
+                Rectangle {
+                    height: 186px;
+                    background: #ffffff;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #dbe3ef;
+                    VerticalLayout {
+                        padding: 18px;
+                        spacing: 10px;
+                        Text { text: "Application image or package"; color: #152b49; font-size: 17px; font-weight: 700; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                text <=> root.image-path;
+                                enabled: !root.busy;
+                                placeholder-text: "Select an image accepted by the configured FileLoader DLL";
+                            }
+                            Button {
+                                text: "Browse…";
+                                enabled: !root.busy;
+                                clicked => { root.browse-image(); }
+                            }
+                        }
+                        Text { text: root.task-status; color: #4e627d; wrap: word-wrap; font-size: 13px; }
+                        Rectangle {
+                            height: 12px;
+                            border-radius: 6px;
+                            background: #e5ebf3;
+                            clip: true;
+                            Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width * max(0, min(100, root.progress)) / 100;
+                                height: parent.height;
+                                border-radius: 6px;
+                                background: root.progress == 100 ? #1d9b70 : #3478d4;
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "Start flashing";
+                                horizontal-stretch: 1;
+                                enabled: root.connected && !root.busy && root.image-path != "";
+                                clicked => { root.flash-requested(root.config-index, root.image-path); }
+                            }
+                            Button {
+                                text: "Cancel";
+                                width: 120px;
+                                enabled: root.flashing;
+                                clicked => { root.cancel-requested(); }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: #0d1726;
+                    border-radius: 10px;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 8px;
+                        Text { text: "Run log"; color: #d8e5f7; font-size: 15px; font-weight: 700; }
+                        log-scroll := ScrollView {
+                            vertical-stretch: 1;
+                            viewport-width: self.visible-width;
+                            viewport-height: max(self.visible-height, log-content.height);
+                            vertical-scrollbar-policy: ScrollBarPolicy.as-needed;
+                            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+                            mouse-drag-pan-enabled: true;
+
+                            log-content := Text {
+                                width: max(100px, log-scroll.visible-width - 18px);
+                                text: root.log-text;
+                                color: #aebed2;
+                                font-family: "monospace";
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

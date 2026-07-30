@@ -1,0 +1,41 @@
+[package]
+name = "autors-security-flasher"
+description = "Slint-based public ECU security flashing example for autors"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+build = "build.rs"
+
+[dependencies]
+autors-can = { workspace = true, default-features = false, features = [
+    "runtime-tokio",
+    "blocking",
+    "vendor-peak",
+    "vendor-tosun",
+    "vendor-vector",
+] }
+autors-diag = { workspace = true, default-features = false, features = [
+    "runtime-tokio",
+    "blocking",
+] }
+autors-isotp = { workspace = true, default-features = false, features = ["runtime-tokio"] }
+autors-native.workspace = true
+autors-security-flasher-sdk = { path = "../security-flasher-sdk" }
+async-trait.workspace = true
+libloading.workspace = true
+rfd = "0.15"
+serde.workspace = true
+slint = "=1.16.1"
+thiserror.workspace = true
+toml = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+slint-build = "=1.16.1"
+winresource = "0.1.31"
