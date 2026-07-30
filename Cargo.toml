@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
+    "examples/security-flasher-sdk",
+    "examples/security-flasher-plugins/examplecar-fileloader",
+    "examples/security-flasher-plugins/examplecar-flow",
+    "examples/security-flasher-plugins/examplecar-seedkey",
     "crates/autors-util",
     "crates/autors-native",
     "crates/autors-runtime",
