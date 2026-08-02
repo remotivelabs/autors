@@ -42,38 +42,38 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-publish = false
+publish = true
 
 [workspace.dependencies]
-autors-util = { path = "crates/autors-util" }
-autors-native = { path = "crates/autors-native" }
-autors-runtime = { path = "crates/autors-runtime", default-features = false }
-autors-a2l = { path = "crates/autors-a2l" }
-autors-formula = { path = "crates/autors-formula" }
-autors-values = { path = "crates/autors-values" }
-autors-cdf = { path = "crates/autors-cdf" }
-autors-dcm = { path = "crates/autors-dcm" }
-autors-datafile = { path = "crates/autors-datafile" }
-autors-dbc = { path = "crates/autors-dbc" }
-autors-ldf = { path = "crates/autors-ldf" }
-autors-asc = { path = "crates/autors-asc" }
-autors-blf = { path = "crates/autors-blf" }
-autors-ltrc = { path = "crates/autors-ltrc" }
-autors-isotp = { path = "crates/autors-isotp", default-features = false }
-autors-odx = { path = "crates/autors-odx" }
-autors-prm = { path = "crates/autors-prm", default-features = false }
-autors-diag = { path = "crates/autors-diag", default-features = false }
-autors-mdf = { path = "crates/autors-mdf" }
-autors-symbols = { path = "crates/autors-symbols" }
-autors-elf = { path = "crates/autors-elf" }
-autors-map = { path = "crates/autors-map" }
-autors-comm = { path = "crates/autors-comm", default-features = false }
-autors-ccp = { path = "crates/autors-ccp", default-features = false }
-autors-xcp = { path = "crates/autors-xcp", default-features = false }
-autors-lin = { path = "crates/autors-lin", default-features = false }
-autors-can = { path = "crates/autors-can", default-features = false }
-autors-scheduler = { path = "crates/autors-scheduler", default-features = false }
-autors-cli = { path = "crates/autors-cli" }
+autors-util = { version = "0.1.0", path = "crates/autors-util" }
+autors-native = { version = "0.1.0", path = "crates/autors-native" }
+autors-runtime = { version = "0.1.0", path = "crates/autors-runtime", default-features = false }
+autors-a2l = { version = "0.1.0", path = "crates/autors-a2l" }
+autors-formula = { version = "0.1.0", path = "crates/autors-formula" }
+autors-values = { version = "0.1.0", path = "crates/autors-values" }
+autors-cdf = { version = "0.1.0", path = "crates/autors-cdf" }
+autors-dcm = { version = "0.1.0", path = "crates/autors-dcm" }
+autors-datafile = { version = "0.1.0", path = "crates/autors-datafile" }
+autors-dbc = { version = "0.1.0", path = "crates/autors-dbc" }
+autors-ldf = { version = "0.1.0", path = "crates/autors-ldf" }
+autors-asc = { version = "0.1.0", path = "crates/autors-asc" }
+autors-blf = { version = "0.1.0", path = "crates/autors-blf" }
+autors-ltrc = { version = "0.1.0", path = "crates/autors-ltrc" }
+autors-isotp = { version = "0.1.0", path = "crates/autors-isotp", default-features = false }
+autors-odx = { version = "0.1.0", path = "crates/autors-odx" }
+autors-prm = { version = "0.1.0", path = "crates/autors-prm", default-features = false }
+autors-diag = { version = "0.1.0", path = "crates/autors-diag", default-features = false }
+autors-mdf = { version = "0.1.0", path = "crates/autors-mdf" }
+autors-symbols = { version = "0.1.0", path = "crates/autors-symbols" }
+autors-elf = { version = "0.1.0", path = "crates/autors-elf" }
+autors-map = { version = "0.1.0", path = "crates/autors-map" }
+autors-comm = { version = "0.1.0", path = "crates/autors-comm", default-features = false }
+autors-ccp = { version = "0.1.0", path = "crates/autors-ccp", default-features = false }
+autors-xcp = { version = "0.1.0", path = "crates/autors-xcp", default-features = false }
+autors-lin = { version = "0.1.0", path = "crates/autors-lin", default-features = false }
+autors-can = { version = "0.1.0", path = "crates/autors-can", default-features = false }
+autors-scheduler = { version = "0.1.0", path = "crates/autors-scheduler", default-features = false }
+autors-cli = { version = "0.1.0", path = "crates/autors-cli" }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
