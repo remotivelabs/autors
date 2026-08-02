@@ -3,7 +3,7 @@ name = "autors-security-flasher"
 description = "Slint-based public ECU security flashing example for autors"
 version.workspace = true
 edition.workspace = true
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 publish = false
 build = "build.rs"
 

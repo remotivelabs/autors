@@ -172,7 +172,6 @@ boundaries:
 ## Repository status and license
 
 The workspace is currently version `0.1.0`, marked `publish = false`, and is
-under active development. The main workspace packages use the proprietary
-license declared in the root `Cargo.toml`. The public Security Flasher example,
-SDK, and example plugins declare `MIT OR Apache-2.0` independently. Review the
-relevant package manifest before redistribution.
+under active development. The entire project, including all workspace crates,
+the Security Flasher example, its SDK, and the example plugins, is licensed
+under the [Apache License 2.0](LICENSE).
