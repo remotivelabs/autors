@@ -1,5 +1,6 @@
 [package]
 name = "autors-ffi"
+description = "Panic-safe C ABI for autors A2L project models and value conversions"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
