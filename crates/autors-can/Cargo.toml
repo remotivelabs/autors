@@ -4,6 +4,8 @@ description = "Cross-platform CAN abstraction with optional vendor backends"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [features]

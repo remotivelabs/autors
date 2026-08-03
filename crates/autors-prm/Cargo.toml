@@ -4,6 +4,8 @@ description = "Parser and executor for INCA ProF-style PRM/CNF ECU flash scripts
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [features]

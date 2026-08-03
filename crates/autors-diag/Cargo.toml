@@ -4,6 +4,8 @@ description = "UDS/KWP2000/DoIP diagnostic protocols (session/message layer) wit
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [features]

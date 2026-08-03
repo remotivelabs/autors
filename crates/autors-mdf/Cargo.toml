@@ -4,6 +4,8 @@ description = "Reading and writing of MDF (ASAM Measurement Data Format) V3/V4 m
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [dependencies]

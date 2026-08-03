@@ -4,6 +4,8 @@ description = "Hardware-agnostic XCP master (with SxI framing) and typed A2L IF_
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [features]

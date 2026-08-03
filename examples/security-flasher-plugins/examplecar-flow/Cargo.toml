@@ -4,6 +4,8 @@ description = "Public configuration-driven UDS security flashing flow plugin exa
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
 publish = false
 
 [lib]

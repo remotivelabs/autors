@@ -4,6 +4,8 @@ description = "Panic-safe C ABI for autors A2L project models and value conversi
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [lib]

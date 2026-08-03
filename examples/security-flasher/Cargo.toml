@@ -4,6 +4,8 @@ description = "Slint-based public ECU security flashing example for autors"
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
 publish = false
 build = "build.rs"
 

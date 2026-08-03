@@ -4,6 +4,8 @@ description = "Safe utility algorithms, value formatting, and logging support"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [dependencies]

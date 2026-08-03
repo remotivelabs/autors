@@ -4,6 +4,8 @@ description = "CCP (CAN Calibration Protocol) master and A2L IF_DATA CCP block p
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [features]

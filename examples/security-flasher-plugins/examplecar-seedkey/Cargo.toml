@@ -4,6 +4,8 @@ description = "Non-production GenerateKeyEx plugin for the public flashing examp
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
 publish = false
 
 [lib]
