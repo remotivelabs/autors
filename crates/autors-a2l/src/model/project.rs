@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::block::{build_block_tree, Block};
+use crate::block::{build_block_tree_owned, Block};
 use crate::error::{Error, Result};
 use crate::model::base::NamedFields;
 use crate::model::header::Header;
@@ -39,7 +39,7 @@ impl ProjectChild {
 impl Project {
     pub fn parse_str(src: &str) -> Result<Self> {
         let tokens = tokenize(src)?;
-        let root = build_block_tree(&tokens)?;
+        let root = build_block_tree_owned(tokens)?;
         let block = root
             .child("PROJECT")
             .ok_or_else(|| Error::parse(0, "no /begin PROJECT block found"))?;

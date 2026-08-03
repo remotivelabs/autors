@@ -299,7 +299,7 @@ impl LtrcFile {
     pub fn parse(input: &str) -> Result<Self> {
         let mut version: Option<(LtrcVersion, usize)> = None;
         let mut start_time: Option<(String, usize)> = None;
-        let mut records = Vec::new();
+        let mut records = Vec::with_capacity(input.len() / 64);
 
         for (index, raw_line) in input.lines().enumerate() {
             let line_number = index + 1;
@@ -432,7 +432,25 @@ impl LtrcFile {
 }
 
 fn parse_record(line_text: &str, line: usize) -> Result<Record> {
-    let tokens: Vec<&str> = line_text.split_whitespace().collect();
+    let mut inline_tokens = [""; 32];
+    let mut token_count = 0;
+    let mut spill = Vec::new();
+    for token in line_text.split_whitespace() {
+        if token_count < inline_tokens.len() {
+            inline_tokens[token_count] = token;
+        } else {
+            if spill.is_empty() {
+                spill.extend_from_slice(&inline_tokens);
+            }
+            spill.push(token);
+        }
+        token_count += 1;
+    }
+    let tokens = if spill.is_empty() {
+        &inline_tokens[..token_count]
+    } else {
+        spill.as_slice()
+    };
     if tokens.len() < 5 {
         return parse_err(line, "LTRC record has fewer than five columns");
     }

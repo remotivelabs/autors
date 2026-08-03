@@ -449,19 +449,18 @@ pub fn to_binary_string_u64(
 ) -> String {
     let size_in_bit = data_type.size_in_bit();
     let mut s = String::with_capacity(size_in_bit as usize);
-    let mut bit = 1u64;
-    let mut digits = Vec::with_capacity(size_in_bit as usize);
-    for _ in 0..size_in_bit {
-        digits.push(if bit & raw_value != 0 { '1' } else { '0' });
-        bit <<= 1;
-    }
-    for c in digits.iter().rev() {
-        s.push(*c);
-    }
-    if remove_leading_zeros {
-        while s.len() > 1 && !s.starts_with('1') {
-            s.remove(0);
+    let mut started = !remove_leading_zeros;
+    for shift in (0..size_in_bit).rev() {
+        let set = raw_value & (1u64 << shift) != 0;
+        if set {
+            started = true;
         }
+        if started {
+            s.push(if set { '1' } else { '0' });
+        }
+    }
+    if s.is_empty() {
+        s.push('0');
     }
     s
 }
@@ -1042,33 +1041,38 @@ impl MemoryRangeList {
             return;
         }
         self.ranges.sort_by_key(|r| r.start);
-        let mut i = self.ranges.len();
-        while i > 1 {
-            i -= 1;
-            let (prev, cur) = (self.ranges[i - 1], self.ranges[i]);
-            if prev.next.saturating_add(min_gap_size) >= cur.start {
-                self.ranges[i - 1] =
-                    MemoryRange::new(prev.start.min(cur.start), prev.next.max(cur.next));
-                self.ranges.remove(i);
+        let mut output_len = 0;
+        for input_index in 0..self.ranges.len() {
+            let current = self.ranges[input_index];
+            if output_len > 0
+                && self.ranges[output_len - 1]
+                    .next
+                    .saturating_add(min_gap_size)
+                    >= current.start
+            {
+                self.ranges[output_len - 1].next =
+                    self.ranges[output_len - 1].next.max(current.next);
+            } else {
+                self.ranges[output_len] = current;
+                output_len += 1;
             }
         }
+        self.ranges.truncate(output_len);
         self.reduced = true;
         if max_block_size == 0 {
             return;
         }
-        let mut i = 0;
-        while i < self.ranges.len() {
-            let r = self.ranges[i];
-            if r.size() > max_block_size as i32 {
-                let n2 = r.start + max_block_size;
-                let size = r.size();
-                self.ranges[i].next = n2;
-                self.ranges.insert(
-                    i + 1,
-                    MemoryRange::new(n2, n2 + (size - max_block_size as i32) as u32),
-                );
+        let ranges = std::mem::take(&mut self.ranges);
+        self.ranges = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            let mut start = range.start;
+            while u64::from(range.next).saturating_sub(u64::from(start)) > u64::from(max_block_size)
+            {
+                let next = start + max_block_size;
+                self.ranges.push(MemoryRange::new(start, next));
+                start = next;
             }
-            i += 1;
+            self.ranges.push(MemoryRange::new(start, range.next));
         }
     }
 

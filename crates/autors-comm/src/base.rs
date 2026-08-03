@@ -747,12 +747,13 @@ pub struct OdtList {
 
 impl OdtList {
     fn new(pid: u8, capacity: i32, max_entries: i32) -> Self {
+        let entry_capacity = capacity.max(0).min(max_entries.max(0)) as usize;
         Self {
             pid,
             remaining: capacity,
             entries_left: max_entries,
             size: 0,
-            entries: Vec::new(),
+            entries: Vec::with_capacity(entry_capacity),
         }
     }
 
@@ -872,7 +873,7 @@ impl DaqList {
     fn new_odt_list(
         &mut self,
         mut b2: u8,
-        consumed: &mut Vec<DaqMeasurement>,
+        consumed: &mut Vec<usize>,
         odt_entries: &mut HashMap<u32, Vec<Arc<OdtEntry>>>,
     ) -> Option<u8> {
         let last_pid = self.odts.keys().next_back().copied();
@@ -915,17 +916,17 @@ impl DaqList {
         Some(pid)
     }
 
-    pub fn fill_daq_list(
+    fn fill_daq_list_indexed<'a>(
         &mut self,
-        measurements: &[DaqMeasurement],
+        measurements: impl IntoIterator<Item = (usize, &'a DaqMeasurement)>,
         odt_entries: &mut HashMap<u32, Vec<Arc<OdtEntry>>>,
         is_ccp: bool,
         reset: bool,
-    ) -> Result<Vec<DaqMeasurement>> {
+    ) -> Result<Vec<usize>> {
         self.position_ctr = if reset { 0 } else { self.position_ctr };
         let mut current_pid: Option<u8> = None;
-        let mut consumed: Vec<DaqMeasurement> = Vec::new();
-        for m in measurements {
+        let mut consumed = Vec::new();
+        for (measurement_index, m) in measurements {
             let meas = &m.measurement;
             let index = m.index;
             let array_size = meas.array_size();
@@ -994,29 +995,76 @@ impl DaqList {
                         .entry(entry.address())
                         .or_default()
                         .push(Arc::clone(&entry));
-                    consumed.push(m.clone());
+                    consumed.push(measurement_index);
                 }
                 b2 = b2.wrapping_add(b3);
             }
         }
         Ok(consumed)
     }
+
+    /// Fills this DAQ list and returns the indices of measurements that fit.
+    ///
+    /// This is useful to callers that already own the source vector: indices
+    /// avoid cloning every consumed measurement merely to remove it later.
+    pub fn fill_daq_list_indices(
+        &mut self,
+        measurements: &[DaqMeasurement],
+        odt_entries: &mut HashMap<u32, Vec<Arc<OdtEntry>>>,
+        is_ccp: bool,
+        reset: bool,
+    ) -> Result<Vec<usize>> {
+        self.fill_daq_list_indexed(measurements.iter().enumerate(), odt_entries, is_ccp, reset)
+    }
+
+    /// Fills this DAQ list from a sorted subset of measurement indices.
+    pub fn fill_daq_list_selected_indices(
+        &mut self,
+        measurements: &[DaqMeasurement],
+        selected: &[usize],
+        odt_entries: &mut HashMap<u32, Vec<Arc<OdtEntry>>>,
+        is_ccp: bool,
+        reset: bool,
+    ) -> Result<Vec<usize>> {
+        self.fill_daq_list_indexed(
+            selected
+                .iter()
+                .filter_map(|&index| measurements.get(index).map(|m| (index, m))),
+            odt_entries,
+            is_ccp,
+            reset,
+        )
+    }
+
+    pub fn fill_daq_list(
+        &mut self,
+        measurements: &[DaqMeasurement],
+        odt_entries: &mut HashMap<u32, Vec<Arc<OdtEntry>>>,
+        is_ccp: bool,
+        reset: bool,
+    ) -> Result<Vec<DaqMeasurement>> {
+        self.fill_daq_list_indices(measurements, odt_entries, is_ccp, reset)
+            .map(|indices| {
+                indices
+                    .into_iter()
+                    .map(|index| measurements[index].clone())
+                    .collect()
+            })
+    }
 }
 
-fn remove_consumed(measurements: &mut Vec<DaqMeasurement>, consumed: &[DaqMeasurement]) {
-    // `fill_daq_list` walks its input in order, so consumed measurements are
-    // an ordered subsequence. Compact once instead of repeatedly searching
-    // and shifting the tail of the Vec (quadratic when most entries fit).
-    let mut consumed_index = 0;
-    measurements.retain(|measurement| {
-        if consumed.get(consumed_index) == Some(measurement) {
-            consumed_index += 1;
-            false
-        } else {
-            true
+fn remove_indices<T>(values: &mut Vec<T>, indices: &[usize]) {
+    let mut indices = indices.iter().copied().peekable();
+    let mut index = 0;
+    values.retain(|_| {
+        let remove = indices.peek().is_some_and(|&next| next == index);
+        if remove {
+            indices.next();
         }
+        index += 1;
+        !remove
     });
-    debug_assert_eq!(consumed_index, consumed.len());
+    debug_assert!(indices.next().is_none());
 }
 
 #[derive(Debug, Default)]
@@ -1060,29 +1108,37 @@ impl DaqDict {
         is_ccp: bool,
     ) -> Result<usize> {
         let DaqDict { lists, odt_entries } = self;
+        odt_entries.reserve(measurements.len());
         for list in lists.iter_mut() {
             if list.evt_no == u16::MAX {
                 continue;
             }
             let evt = list.evt_no;
-            let candidates: Vec<DaqMeasurement> = measurements
+            let candidates: Vec<usize> = measurements
                 .iter()
+                .enumerate()
                 .filter(|m| {
-                    m.desired_event_channels
+                    m.1.desired_event_channels
                         .as_ref()
                         .is_some_and(|ch| ch.contains(&evt))
                 })
-                .cloned()
+                .map(|(index, _)| index)
                 .collect();
-            let consumed = list.fill_daq_list(&candidates, odt_entries, is_ccp, true)?;
-            remove_consumed(measurements, &consumed);
+            let consumed = list.fill_daq_list_selected_indices(
+                measurements,
+                &candidates,
+                odt_entries,
+                is_ccp,
+                true,
+            )?;
+            remove_indices(measurements, &consumed);
         }
         for list in lists.iter_mut() {
             if list.evt_no == u16::MAX {
                 continue;
             }
-            let consumed = list.fill_daq_list(measurements, odt_entries, is_ccp, false)?;
-            remove_consumed(measurements, &consumed);
+            let consumed = list.fill_daq_list_indices(measurements, odt_entries, is_ccp, false)?;
+            remove_indices(measurements, &consumed);
         }
         for list in lists.iter_mut() {
             if list.evt_no != u16::MAX && !list.odts.is_empty() {
@@ -1970,13 +2026,13 @@ mod tests {
     }
 
     #[test]
-    fn remove_consumed_compacts_ordered_subsequence_with_duplicates() {
+    fn remove_indices_compacts_ordered_subsequence_with_duplicates() {
         let a = daq_meas("a", 0x1000, DataType::UByte, None);
         let b = daq_meas("b", 0x1001, DataType::UByte, None);
         let c = daq_meas("c", 0x1002, DataType::UByte, None);
         let mut measurements = vec![a.clone(), b.clone(), a.clone(), c.clone()];
 
-        remove_consumed(&mut measurements, &[a.clone(), a]);
+        remove_indices(&mut measurements, &[0, 2]);
 
         assert_eq!(measurements, vec![b, c]);
     }

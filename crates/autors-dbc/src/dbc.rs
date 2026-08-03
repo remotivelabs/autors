@@ -23,7 +23,8 @@
 
 use crate::error::{Error, Result};
 use indexmap::IndexMap;
-use std::collections::BTreeMap;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::Path;
 
@@ -1094,7 +1095,8 @@ impl DBCFile {
     pub fn parse_str(text: &str) -> Result<Self> {
         let statements = logical_lines(text)?;
         let mut file = Self::new();
-        let mut current_message: Option<u32> = None;
+        let mut current_message: Option<(String, usize)> = None;
+        let mut message_locations = HashMap::new();
         let mut in_ns = false;
 
         for (line_no, statement) in statements {
@@ -1131,17 +1133,28 @@ impl DBCFile {
                 }
                 "BO_" => {
                     if let Some(message) = parse_message(rest) {
-                        current_message = Some(message.id);
-                        file.sources
-                            .entry(message.source.clone())
-                            .or_insert_with(|| SourceType::new(&message.source))
-                            .messages
-                            .push(message);
+                        let source_name = message.source.clone();
+                        let source = file
+                            .sources
+                            .entry(source_name.clone())
+                            .or_insert_with(|| SourceType::new(&source_name));
+                        let message_index = source.messages.len();
+                        message_locations
+                            .entry(message.id)
+                            .or_insert_with(|| (source_name.clone(), message_index));
+                        source.messages.push(message);
+                        current_message = Some((source_name, message_index));
                     }
                 }
                 "SG_" => {
-                    if let (Some(id), Some(signal)) = (current_message, parse_signal(rest)) {
-                        if let Some(message) = find_message_mut(&mut file, id) {
+                    if let (Some((source_name, message_index)), Some(signal)) =
+                        (current_message.as_ref(), parse_signal(rest))
+                    {
+                        if let Some(message) = file
+                            .sources
+                            .get_mut(source_name)
+                            .and_then(|source| source.messages.get_mut(*message_index))
+                        {
                             message.add_signal(signal);
                         }
                     }
@@ -1166,15 +1179,15 @@ impl DBCFile {
                 "BA_DEF_DEF_" | "BA_DEF_DEF_REL_" => {
                     parse_attribute_default(&mut file, rest);
                 }
-                "BA_" => parse_attribute(&mut file, rest),
-                "CM_" => parse_comment(&mut file, rest),
-                "VAL_" => parse_signal_values(&mut file, rest),
+                "BA_" => parse_attribute(&mut file, &message_locations, rest),
+                "CM_" => parse_comment(&mut file, &message_locations, rest),
+                "VAL_" => parse_signal_values(&mut file, &message_locations, rest),
                 "SIG_GROUP_" => {
                     if let Some(group) = parse_signal_group(rest) {
                         file.signal_groups.insert(group.id, group);
                     }
                 }
-                "SIG_VALTYPE_" => parse_signal_float_type(&mut file, rest),
+                "SIG_VALTYPE_" => parse_signal_float_type(&mut file, &message_locations, rest),
                 _ => {}
             }
 
@@ -1507,30 +1520,31 @@ fn needs_semicolon(keyword: &str) -> bool {
     )
 }
 
-fn logical_lines(text: &str) -> Result<Vec<(u32, String)>> {
+fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
     let mut output = Vec::new();
     let mut lines = text.lines().enumerate().peekable();
     let mut in_ns = false;
     while let Some((index, raw)) = lines.next() {
-        let mut statement = raw.trim().to_string();
+        let statement = raw.trim();
         if statement.is_empty() {
-            output.push((index as u32 + 1, statement));
+            output.push((index as u32 + 1, Cow::Borrowed(statement)));
             continue;
         }
         if statement.starts_with("NS_") {
             in_ns = true;
-            output.push((index as u32 + 1, statement));
+            output.push((index as u32 + 1, Cow::Borrowed(statement)));
             continue;
         }
         if in_ns {
             if statement.starts_with("BS_") {
                 in_ns = false;
             }
-            output.push((index as u32 + 1, statement));
+            output.push((index as u32 + 1, Cow::Borrowed(statement)));
             continue;
         }
-        let keyword = split_keyword(&statement).0.to_string();
-        if needs_semicolon(&keyword) {
+        let keyword = split_keyword(statement).0;
+        if needs_semicolon(keyword) && !statement.trim_end().ends_with(';') {
+            let mut statement = statement.to_string();
             while !statement.trim_end().ends_with(';') {
                 let Some((_, next)) = lines.next() else {
                     return Err(Error::Parse {
@@ -1541,8 +1555,10 @@ fn logical_lines(text: &str) -> Result<Vec<(u32, String)>> {
                 statement.push('\n');
                 statement.push_str(next.trim());
             }
+            output.push((index as u32 + 1, Cow::Owned(statement)));
+        } else {
+            output.push((index as u32 + 1, Cow::Borrowed(statement)));
         }
-        output.push((index as u32 + 1, statement));
     }
     Ok(output)
 }
@@ -1765,7 +1781,11 @@ fn parse_attribute_default(file: &mut DBCFile, rest: &str) {
     }
 }
 
-fn parse_attribute(file: &mut DBCFile, rest: &str) {
+fn parse_attribute(
+    file: &mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    rest: &str,
+) {
     let mut cursor = Cur::new(rest);
     cursor.skip_ws();
     let Some(name) = cursor.quoted().map(str::to_string) else {
@@ -1811,7 +1831,7 @@ fn parse_attribute(file: &mut DBCFile, rest: &str) {
         (AttribDefObjectType::Bo, Some("BO_")) => {
             let id = cursor.digits().parse().ok();
             if let (Some(id), Some(value)) = (id, read_value(&mut cursor)) {
-                if let Some(message) = find_message_mut(file, id) {
+                if let Some(message) = find_message_mut(file, message_locations, id) {
                     message
                         .attributes
                         .insert(name.clone(), AttributeType::new(name, value));
@@ -1823,7 +1843,7 @@ fn parse_attribute(file: &mut DBCFile, rest: &str) {
             cursor.skip_ws();
             let signal_name = cursor.token().to_string();
             if let (Some(id), Some(value)) = (id, read_value(&mut cursor)) {
-                if let Some(signal) = find_signal_mut(file, id, &signal_name) {
+                if let Some(signal) = find_signal_mut(file, message_locations, id, &signal_name) {
                     signal
                         .attributes
                         .insert(name.clone(), AttributeType::new(name, value));
@@ -1844,7 +1864,11 @@ fn parse_attribute(file: &mut DBCFile, rest: &str) {
     }
 }
 
-fn parse_comment(file: &mut DBCFile, rest: &str) {
+fn parse_comment(
+    file: &mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    rest: &str,
+) {
     let rest = rest.trim();
     if let Some(value) = rest.strip_prefix('"') {
         file.comment = trim_qs(value).to_string();
@@ -1865,7 +1889,7 @@ fn parse_comment(file: &mut DBCFile, rest: &str) {
             let id = cursor.digits().parse().ok();
             cursor.skip_ws();
             if let (Some(id), Some(comment)) = (id, cursor.quoted()) {
-                if let Some(message) = find_message_mut(file, id) {
+                if let Some(message) = find_message_mut(file, message_locations, id) {
                     message.comment = comment.to_string();
                 }
             }
@@ -1876,7 +1900,7 @@ fn parse_comment(file: &mut DBCFile, rest: &str) {
             let name = cursor.token().to_string();
             cursor.skip_ws();
             if let (Some(id), Some(comment)) = (id, cursor.quoted()) {
-                if let Some(signal) = find_signal_mut(file, id, &name) {
+                if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
                     signal.comment = comment.to_string();
                 }
             }
@@ -1894,7 +1918,11 @@ fn parse_comment(file: &mut DBCFile, rest: &str) {
     }
 }
 
-fn parse_signal_values(file: &mut DBCFile, rest: &str) {
+fn parse_signal_values(
+    file: &mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    rest: &str,
+) {
     let mut cursor = Cur::new(rest);
     let Some(id) = cursor.digits().parse().ok() else {
         return;
@@ -1903,7 +1931,7 @@ fn parse_signal_values(file: &mut DBCFile, rest: &str) {
     let name = cursor.token().to_string();
     cursor.skip_ws();
     let values = quoted_pairs(cursor.rest());
-    if let Some(signal) = find_signal_mut(file, id, &name) {
+    if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
         signal.enums = Some(values);
     }
 }
@@ -1932,7 +1960,11 @@ fn parse_signal_group(rest: &str) -> Option<SignalGroupType> {
     })
 }
 
-fn parse_signal_float_type(file: &mut DBCFile, rest: &str) {
+fn parse_signal_float_type(
+    file: &mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    rest: &str,
+) {
     let mut cursor = Cur::new(rest);
     let Some(id) = cursor.digits().parse().ok() else {
         return;
@@ -1947,20 +1979,30 @@ fn parse_signal_float_type(file: &mut DBCFile, rest: &str) {
         "2" => SignalFloatType::IeeeFloat64,
         _ => return,
     };
-    if let Some(signal) = find_signal_mut(file, id, &name) {
+    if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
         signal.set_float_type(float_type);
     }
 }
 
-fn find_message_mut(file: &mut DBCFile, id: u32) -> Option<&mut MsgType> {
+fn find_message_mut<'a>(
+    file: &'a mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    id: u32,
+) -> Option<&'a mut MsgType> {
+    let (source_name, message_index) = message_locations.get(&id)?;
     file.sources
-        .values_mut()
-        .flat_map(|source| source.messages.iter_mut())
-        .find(|message| message.id == id)
+        .get_mut(source_name)?
+        .messages
+        .get_mut(*message_index)
 }
 
-fn find_signal_mut<'a>(file: &'a mut DBCFile, id: u32, name: &str) -> Option<&'a mut SignalType> {
-    find_message_mut(file, id)?.get_signal_mut(name)
+fn find_signal_mut<'a>(
+    file: &'a mut DBCFile,
+    message_locations: &HashMap<u32, (String, usize)>,
+    id: u32,
+    name: &str,
+) -> Option<&'a mut SignalType> {
+    find_message_mut(file, message_locations, id)?.get_signal_mut(name)
 }
 
 #[cfg(test)]

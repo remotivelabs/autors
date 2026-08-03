@@ -563,7 +563,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "autors-a2l"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "indexmap",
  "thiserror 2.0.19",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "autors-asc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-can",
  "thiserror 2.0.19",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "autors-blf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-can",
  "autors-lin",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "autors-can"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-native",
@@ -604,7 +604,7 @@ dependencies = [
 
 [[package]]
 name = "autors-ccp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-a2l",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "autors-cdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "quick-xml 0.36.2",
  "serde",
@@ -627,7 +627,7 @@ dependencies = [
 
 [[package]]
 name = "autors-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-a2l",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "autors-comm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-a2l",
@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "autors-datafile"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "thiserror 2.0.19",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "autors-dbc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "indexmap",
  "thiserror 2.0.19",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "autors-dcm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-formula",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "autors-diag"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-a2l",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "autors-elf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-symbols",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "autors-ffi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-runtime",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "autors-formula"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "indexmap",
@@ -750,7 +750,7 @@ dependencies = [
 
 [[package]]
 name = "autors-isotp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-can",
@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "autors-ldf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "indexmap",
  "thiserror 2.0.19",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "autors-lin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-native",
@@ -782,7 +782,7 @@ dependencies = [
 
 [[package]]
 name = "autors-ltrc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-lin",
  "thiserror 2.0.19",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "autors-map"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-symbols",
@@ -800,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "autors-mdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-formula",
@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "autors-native"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libloading",
  "thiserror 2.0.19",
@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "autors-odx"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "indexmap",
  "quick-xml 0.36.2",
@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "autors-prm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-can",
@@ -850,14 +850,14 @@ dependencies = [
 
 [[package]]
 name = "autors-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "autors-scheduler"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-can",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "autors-security-flasher"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-can",
@@ -892,11 +892,11 @@ dependencies = [
 
 [[package]]
 name = "autors-security-flasher-sdk"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "autors-symbols"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "thiserror 2.0.19",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "autors-util"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "log",
  "thiserror 2.0.19",
@@ -912,7 +912,7 @@ dependencies = [
 
 [[package]]
 name = "autors-values"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-a2l",
  "autors-cdf",
@@ -924,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "autors-xcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "autors-a2l",
@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "examplecar-fileloader"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-datafile",
  "autors-security-flasher-sdk",
@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "examplecar-flow"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "autors-security-flasher-sdk",
  "chrono",
@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "examplecar-seedkey"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "exr"

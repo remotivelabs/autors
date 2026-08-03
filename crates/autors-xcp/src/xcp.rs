@@ -5874,12 +5874,18 @@ pub struct DaqDictXcp {
     pub odt_entries: std::collections::HashMap<u32, Vec<Arc<OdtEntry>>>,
 }
 
-fn remove_consumed(measurements: &mut Vec<DaqMeasurement>, consumed: &[DaqMeasurement]) {
-    for c in consumed {
-        if let Some(pos) = measurements.iter().position(|m| m == c) {
-            measurements.remove(pos);
+fn remove_indices<T>(values: &mut Vec<T>, indices: &[usize]) {
+    let mut indices = indices.iter().copied().peekable();
+    let mut index = 0;
+    values.retain(|_| {
+        let remove = indices.peek().is_some_and(|&next| next == index);
+        if remove {
+            indices.next();
         }
-    }
+        index += 1;
+        !remove
+    });
+    debug_assert!(indices.next().is_none());
 }
 
 impl DaqDictXcp {
@@ -6001,33 +6007,42 @@ impl DaqDictXcp {
         measurements: &mut Vec<DaqMeasurement>,
         is_ccp: bool,
     ) -> Result<usize> {
+        self.odt_entries.reserve(measurements.len());
         for list in &mut self.lists {
             let evt_no = list.base.evt_no;
             if evt_no == u16::MAX {
                 continue;
             }
-            let preferred: Vec<DaqMeasurement> = measurements
+            let preferred: Vec<usize> = measurements
                 .iter()
-                .filter(|m| {
+                .enumerate()
+                .filter(|(_, m)| {
                     m.desired_event_channels
                         .as_ref()
                         .is_some_and(|chs| chs.contains(&evt_no))
                 })
-                .cloned()
+                .map(|(index, _)| index)
                 .collect();
-            let consumed =
-                list.base
-                    .fill_daq_list(&preferred, &mut self.odt_entries, is_ccp, true)?;
-            remove_consumed(measurements, &consumed);
+            let consumed = list.base.fill_daq_list_selected_indices(
+                measurements,
+                &preferred,
+                &mut self.odt_entries,
+                is_ccp,
+                true,
+            )?;
+            remove_indices(measurements, &consumed);
         }
         for list in &mut self.lists {
             if list.base.evt_no == u16::MAX {
                 continue;
             }
-            let consumed =
-                list.base
-                    .fill_daq_list(measurements, &mut self.odt_entries, is_ccp, false)?;
-            remove_consumed(measurements, &consumed);
+            let consumed = list.base.fill_daq_list_indices(
+                measurements,
+                &mut self.odt_entries,
+                is_ccp,
+                false,
+            )?;
+            remove_indices(measurements, &consumed);
         }
         for list in &mut self.lists {
             if list.base.evt_no != u16::MAX && !list.base.odts.is_empty() {

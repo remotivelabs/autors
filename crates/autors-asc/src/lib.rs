@@ -270,6 +270,7 @@ impl AscFile {
     /// Parses ASC text.
     pub fn parse(input: &str) -> Result<Self> {
         let mut file = Self::new();
+        file.records.reserve(input.len() / 64);
         let mut last_timestamp = Duration::ZERO;
 
         for (index, raw_line) in input.lines().enumerate() {
@@ -424,7 +425,28 @@ fn parse_record(
     number_base: NumberBase,
     line: usize,
 ) -> Result<AscRecord> {
-    let tokens: Vec<&str> = body.split_whitespace().collect();
+    // A CAN FD line with a full 64-byte payload still fits inline. Avoid a
+    // heap allocation for the token pointer list on the common parse path,
+    // while retaining a spill vector for vendor-specific trailing columns.
+    let mut inline_tokens = [""; 96];
+    let mut token_count = 0;
+    let mut spill = Vec::new();
+    for token in body.split_whitespace() {
+        if token_count < inline_tokens.len() {
+            inline_tokens[token_count] = token;
+        } else {
+            if spill.is_empty() {
+                spill.extend_from_slice(&inline_tokens);
+            }
+            spill.push(token);
+        }
+        token_count += 1;
+    }
+    let tokens = if spill.is_empty() {
+        &inline_tokens[..token_count]
+    } else {
+        spill.as_slice()
+    };
     if tokens.is_empty() {
         return parse_err(line, "timestamp without an event");
     }

@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use autors_a2l::block::Item;
 use autors_a2l::model::characteristic::{AxisPts, Characteristic};
@@ -388,7 +389,13 @@ pub struct AddressNode<'a> {
 /// an average O(1) hash lookup. Later definitions with the same name retain
 /// the existing override behavior.
 pub struct AddressNodeResolver<'a> {
-    record_layouts: HashMap<&'a str, &'a RecordLayout>,
+    record_layouts: HashMap<&'a str, ResolvedRecordLayout<'a>>,
+}
+
+struct ResolvedRecordLayout<'a> {
+    layout: &'a RecordLayout,
+    entries: Vec<LayoutEntry<'a>>,
+    empty_axis_size: OnceLock<i64>,
 }
 
 impl<'a> AddressNodeResolver<'a> {
@@ -398,7 +405,17 @@ impl<'a> AddressNodeResolver<'a> {
             .modules()
             .flat_map(|module| &module.children)
             .filter_map(|child| match child {
-                ModuleChild::RecordLayout(layout) => Some((layout.name.as_str(), layout)),
+                ModuleChild::RecordLayout(layout) => {
+                    let entries = layout_entries(layout);
+                    Some((
+                        layout.name.as_str(),
+                        ResolvedRecordLayout {
+                            layout,
+                            entries,
+                            empty_axis_size: OnceLock::new(),
+                        },
+                    ))
+                }
                 _ => None,
             })
             .collect();
@@ -409,18 +426,13 @@ impl<'a> AddressNodeResolver<'a> {
     pub fn address_node(&self, child: &'a ModuleChild) -> Result<Option<AddressNode<'a>>> {
         let node = match child {
             ModuleChild::Measurement(n) => measurement_node(n)?,
-            ModuleChild::Characteristic(n) => characteristic_node(
+            ModuleChild::Characteristic(n) => characteristic_node_resolved(
                 n,
-                self.record_layouts
-                    .get(n.rec.record_layout.as_str())
-                    .copied(),
+                self.record_layouts.get(n.rec.record_layout.as_str()),
             )?,
-            ModuleChild::AxisPts(n) => axis_pts_node(
-                n,
-                self.record_layouts
-                    .get(n.rec.record_layout.as_str())
-                    .copied(),
-            )?,
+            ModuleChild::AxisPts(n) => {
+                axis_pts_node_resolved(n, self.record_layouts.get(n.rec.record_layout.as_str()))?
+            }
             ModuleChild::Blob(n) => AddressNode {
                 name: &n.named.name,
                 address: n.addr.address,
@@ -571,6 +583,27 @@ fn characteristic_node<'a>(
     n: &'a Characteristic,
     rl: Option<&'a RecordLayout>,
 ) -> Result<AddressNode<'a>> {
+    characteristic_node_impl(n, rl, None, None)
+}
+
+fn characteristic_node_resolved<'a>(
+    n: &'a Characteristic,
+    resolved: Option<&ResolvedRecordLayout<'a>>,
+) -> Result<AddressNode<'a>> {
+    characteristic_node_impl(
+        n,
+        resolved.map(|r| r.layout),
+        resolved.map(|r| r.entries.as_slice()),
+        resolved.map(|r| &r.empty_axis_size),
+    )
+}
+
+fn characteristic_node_impl<'a>(
+    n: &'a Characteristic,
+    rl: Option<&'a RecordLayout>,
+    entries: Option<&[LayoutEntry<'a>]>,
+    empty_axis_size: Option<&OnceLock<i64>>,
+) -> Result<AddressNode<'a>> {
     // Memory size is the record layout size.
     let memory_size = match rl {
         Some(rl) => {
@@ -582,7 +615,35 @@ fn characteristic_node<'a>(
                     _ => None,
                 })
                 .collect();
-            let mut size = record_layout_size(i32::MAX, rl, Some(&axis), 0)?;
+            let mut size = if axis.is_empty() {
+                match (entries, empty_axis_size) {
+                    (Some(entries), Some(cache)) => match cache.get() {
+                        Some(size) => *size,
+                        None => {
+                            let size = record_layout_size_from_entries(
+                                i32::MAX,
+                                rl,
+                                entries.iter().copied(),
+                                Some(&axis),
+                                0,
+                            )?;
+                            let _ = cache.set(size);
+                            size
+                        }
+                    },
+                    _ => record_layout_size(i32::MAX, rl, Some(&axis), 0)?,
+                }
+            } else if let Some(entries) = entries {
+                record_layout_size_from_entries(
+                    i32::MAX,
+                    rl,
+                    entries.iter().copied(),
+                    Some(&axis),
+                    0,
+                )?
+            } else {
+                record_layout_size(i32::MAX, rl, Some(&axis), 0)?
+            };
             // ASCII / VAL_BLK additionally multiply by the number of elements.
             if n.char_type == CharacteristicType::ASCII
                 || n.char_type == CharacteristicType::VAL_BLK
@@ -611,10 +672,38 @@ fn characteristic_node<'a>(
 }
 
 fn axis_pts_node<'a>(n: &'a AxisPts, rl: Option<&'a RecordLayout>) -> Result<AddressNode<'a>> {
+    axis_pts_node_impl(n, rl, None)
+}
+
+fn axis_pts_node_resolved<'a>(
+    n: &'a AxisPts,
+    resolved: Option<&ResolvedRecordLayout<'a>>,
+) -> Result<AddressNode<'a>> {
+    axis_pts_node_impl(
+        n,
+        resolved.map(|r| r.layout),
+        resolved.map(|r| r.entries.as_slice()),
+    )
+}
+
+fn axis_pts_node_impl<'a>(
+    n: &'a AxisPts,
+    rl: Option<&'a RecordLayout>,
+    entries: Option<&[LayoutEntry<'a>]>,
+) -> Result<AddressNode<'a>> {
     // Memory size = layout size, with `max_axis_points` as the default axis
     // point count.
     let memory_size = match rl {
-        Some(rl) => record_layout_size(i32::MAX, rl, None, n.max_axis_points)?,
+        Some(rl) => match entries {
+            Some(entries) => record_layout_size_from_entries(
+                i32::MAX,
+                rl,
+                entries.iter().copied(),
+                None,
+                n.max_axis_points,
+            )?,
+            None => record_layout_size(i32::MAX, rl, None, n.max_axis_points)?,
+        },
         None => 0,
     };
     Ok(AddressNode {
@@ -655,6 +744,7 @@ fn number_of_elements(n: &Characteristic) -> i64 {
 
 /// Layout entry view (same as the private `LayoutEntry` in autors-a2l
 /// record_layout.rs; this file keeps its own local copy).
+#[derive(Clone, Copy)]
 enum LayoutEntry<'a> {
     NoAxisPts(&'a autors_a2l::model::record_layout::NoAxisPtsLayoutDesc),
     AxisPts(&'a autors_a2l::model::record_layout::AxisPtsLayoutDesc),
@@ -761,8 +851,24 @@ pub(crate) fn record_layout_size(
     axis_descrs: Option<&[&AxisDescr]>,
     default_max_axis_points: i32,
 ) -> Result<i64> {
+    record_layout_size_from_entries(
+        position,
+        rl,
+        layout_entries(rl),
+        axis_descrs,
+        default_max_axis_points,
+    )
+}
+
+fn record_layout_size_from_entries<'a>(
+    position: i32,
+    rl: &RecordLayout,
+    entries: impl IntoIterator<Item = LayoutEntry<'a>>,
+    axis_descrs: Option<&[&AxisDescr]>,
+    default_max_axis_points: i32,
+) -> Result<i64> {
     let mut num: i32 = 0;
-    for entry in layout_entries(rl) {
+    for entry in entries {
         if position <= entry.position() {
             continue;
         }

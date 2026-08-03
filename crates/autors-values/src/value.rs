@@ -2219,38 +2219,40 @@ impl MemoryRangeList {
             return;
         }
         self.ranges.sort_by_key(|r| r.start);
-        let mut i = self.ranges.len();
-        while i > 1 {
-            i -= 1;
-            let (prev, cur) = {
-                let (a, b) = self.ranges.split_at_mut(i);
-                (&mut a[i - 1], &b[0])
-            };
-            if prev.next.saturating_add(min_gap_size) >= cur.start {
-                prev.start = prev.start.min(cur.start);
-                prev.next = prev.next.max(cur.next);
-                self.ranges.remove(i);
+        let mut output_len = 0;
+        for input_index in 0..self.ranges.len() {
+            let current = self.ranges[input_index];
+            if output_len > 0
+                && self.ranges[output_len - 1]
+                    .next
+                    .saturating_add(min_gap_size)
+                    >= current.start
+            {
+                self.ranges[output_len - 1].next =
+                    self.ranges[output_len - 1].next.max(current.next);
+            } else {
+                self.ranges[output_len] = current;
+                output_len += 1;
             }
         }
+        self.ranges.truncate(output_len);
         self.reduced = true;
         if max_block_size == 0 {
             return;
         }
-        let mut i = 0;
-        while i < self.ranges.len() {
-            if self.ranges[i].size() > max_block_size {
-                let num2 = self.ranges[i].start + max_block_size as u32;
-                let size = self.ranges[i].size();
-                self.ranges[i].next = num2;
-                self.ranges.insert(
-                    i + 1,
-                    MemoryRange {
-                        start: num2,
-                        next: num2 + (size - max_block_size) as u32,
-                    },
-                );
+        let ranges = std::mem::take(&mut self.ranges);
+        self.ranges = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            let mut start = range.start;
+            while (range.next - start) as usize > max_block_size {
+                let next = start + max_block_size as u32;
+                self.ranges.push(MemoryRange { start, next });
+                start = next;
             }
-            i += 1;
+            self.ranges.push(MemoryRange {
+                start,
+                next: range.next,
+            });
         }
     }
 

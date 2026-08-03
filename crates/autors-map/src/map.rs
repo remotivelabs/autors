@@ -19,7 +19,7 @@
 
 use std::path::Path;
 
-use indexmap::IndexMap;
+use indexmap::{map::Entry, IndexMap};
 
 use autors_a2l::model::module::{Module, ModuleChild};
 use autors_a2l::Project;
@@ -37,7 +37,7 @@ fn match_address(tok: &str) -> Option<&str> {
         .strip_prefix("0x")
         .or_else(|| tok.strip_prefix("0X"))
         .unwrap_or(tok);
-    if !hex.is_empty() && hex.len() <= 16 && hex.chars().all(|c| c.is_ascii_hexdigit()) {
+    if !hex.is_empty() && hex.len() <= 16 && hex.as_bytes().iter().all(u8::is_ascii_hexdigit) {
         Some(hex)
     } else {
         None
@@ -46,12 +46,12 @@ fn match_address(tok: &str) -> Option<&str> {
 
 /// Matches a symbol name token (see module docs for the accepted shape).
 fn match_symbol(tok: &str) -> bool {
-    let mut chars = tok.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '.' || c == '$' => {}
+    let mut bytes = tok.as_bytes().iter().copied();
+    match bytes.next() {
+        Some(c) if c.is_ascii_alphabetic() || matches!(c, b'_' | b'.' | b'$') => {}
         _ => return false,
     }
-    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$' | '[' | ']'))
+    bytes.all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.' | b'$' | b'[' | b']'))
 }
 
 /// One symbol from a MAP file.
@@ -72,7 +72,8 @@ impl MapSymbolValue {
     /// register the base name of an array's element 0).
     fn new(name: &str, address: u64) -> Result<(Self, Option<String>)> {
         let digits = name
-            .chars()
+            .as_bytes()
+            .iter()
             .rev()
             .take_while(|c| c.is_ascii_digit())
             .count();
@@ -124,16 +125,17 @@ impl MapFile {
     /// address token of a line is found, every other symbol-shaped token on
     /// that line is registered as a symbol at that address.
     pub fn open_str(text: &str, source_file: Option<String>) -> Result<Self> {
+        // Most MAP formats put at most one symbol-bearing record on each
+        // line. Reserving from the line count avoids repeatedly growing and
+        // rehashing large symbol tables.
+        let estimated_symbols = text.lines().count();
         let mut file = MapFile {
             source_file,
-            symbols: IndexMap::new(),
+            symbols: IndexMap::with_capacity(estimated_symbols),
         };
         for line in text.lines() {
-            // Only positions 0 and 1 can contain an address. Re-create this
-            // allocation-free iterator for the registration pass below.
-            let tokens = || line.split([' ', '\t']).filter(|token| !token.is_empty());
-            let mut prefix = tokens();
-            let (Some(first), Some(second)) = (prefix.next(), prefix.next()) else {
+            let mut tokens = line.split_ascii_whitespace();
+            let (Some(first), Some(second)) = (tokens.next(), tokens.next()) else {
                 continue;
             };
             let (address_token, address_hex, ai) = if let Some(hex) = match_address(first) {
@@ -148,7 +150,7 @@ impl MapFile {
                 offset: 0,
                 message: format!("invalid MAP address {address_token:?}"),
             })?;
-            for (j, tok) in tokens().enumerate() {
+            for (j, tok) in [first, second].into_iter().chain(tokens).enumerate() {
                 if j == ai || !match_symbol(tok) {
                     continue;
                 }
@@ -157,9 +159,11 @@ impl MapFile {
                 // Symbols with index 0 also register their base name (without
                 // overwriting an existing entry).
                 if let Some(base) = base {
-                    if !base.is_empty() && !file.symbols.contains_key(&base) {
-                        let (sv2, _) = MapSymbolValue::new(&base, address)?;
-                        file.symbols.insert(base, sv2);
+                    if !base.is_empty() {
+                        if let Entry::Vacant(entry) = file.symbols.entry(base) {
+                            let (sv2, _) = MapSymbolValue::new(entry.key(), address)?;
+                            entry.insert(sv2);
+                        }
                     }
                 }
             }
