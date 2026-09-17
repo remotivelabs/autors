@@ -164,3 +164,41 @@ fn rejects_cross_reference_and_layout_errors() {
     let overlap = SAMPLE.replace("Error, 8;", "Error, 7;");
     assert!(Ldf::parse_str(&overlap).is_err());
 }
+
+/// A generating tool writes `<...>` where a node attribute has no value.
+const PLACEHOLDER: &str = r#"
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Master, 5 ms, 0.1 ms;
+    Slaves: Slave;
+}
+
+Signals {
+    Status: 8, 0, Slave, Master;
+}
+
+Frames {
+    Report: 0x01, Slave, 1 { Status, 0; }
+}
+
+Node_attributes {
+    Slave {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x03;
+        initial_NAD = 0x03;
+        product_id = 0xB0, 0xB002, 0;
+        response_error = <invalid>;
+    }
+}
+"#;
+
+#[test]
+fn a_placeholder_means_the_attribute_has_no_value() {
+    let ldf = Ldf::parse_str(PLACEHOLDER).unwrap();
+
+    assert_eq!(ldf.slaves["Slave"].response_error, None);
+}

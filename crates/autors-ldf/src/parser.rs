@@ -6,6 +6,8 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq)]
 enum TokenKind {
     Word(String),
+    /// A `<...>` placeholder, which a generating tool writes where it has no value.
+    Placeholder(String),
     Number(String),
     String(String),
     LBrace,
@@ -115,6 +117,7 @@ impl<'a> Lexer<'a> {
                 value if value.is_ascii_alphabetic() || value == '_' => {
                     TokenKind::Word(self.word())
                 }
+                '<' => TokenKind::Placeholder(self.placeholder(line, column)?),
                 other => {
                     return Err(Error::Parse {
                         line,
@@ -155,6 +158,26 @@ impl<'a> Lexer<'a> {
             self.bump();
         }
         self.input[start..self.offset].to_string()
+    }
+
+    /// The text inside a `<...>` placeholder, which a generating tool writes where it has no
+    /// value. The LDF grammar has no angle brackets, so nothing else can be meant by one.
+    fn placeholder(&mut self, line: usize, column: usize) -> Result<String> {
+        self.bump();
+        let start = self.offset;
+        while matches!(self.peek(), Some(value) if value != '>') {
+            self.bump();
+        }
+        if self.peek().is_none() {
+            return Err(Error::Parse {
+                line,
+                column,
+                message: "unterminated placeholder".to_string(),
+            });
+        }
+        let text = self.input[start..self.offset].to_string();
+        self.bump();
+        Ok(text)
     }
 
     fn number(&mut self) -> String {
@@ -639,7 +662,7 @@ impl Parser {
                     }
                     "response_error" => {
                         self.expect(TokenKind::Equals)?;
-                        node.response_error = Some(self.expect_identifier()?);
+                        node.response_error = self.identifier_or_placeholder()?;
                         self.expect(TokenKind::Semicolon)?;
                     }
                     "fault_state_signals" => {
@@ -1099,6 +1122,16 @@ impl Parser {
         }
         self.expect(TokenKind::Semicolon)?;
         Ok(output)
+    }
+
+    /// The identifier a value names, or `None` when it is a `<...>` placeholder.
+    fn identifier_or_placeholder(&mut self) -> Result<Option<String>> {
+        let token = self.next().ok_or_else(|| self.unexpected("identifier"))?;
+        match token.kind {
+            TokenKind::Word(value) => Ok(Some(value)),
+            TokenKind::Placeholder(_) => Ok(None),
+            _ => Err(self.at_token(&token, "expected identifier")),
+        }
     }
 
     fn expect_identifier(&mut self) -> Result<String> {
