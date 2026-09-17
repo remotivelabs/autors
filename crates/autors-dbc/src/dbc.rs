@@ -1520,6 +1520,19 @@ fn needs_semicolon(keyword: &str) -> bool {
     )
 }
 
+/// Whether a statement has ended: a `;` outside a quoted string.
+///
+/// A comment may run over several lines, and a line of one can end in `;` while the statement
+/// continues, so the semicolon alone does not say.
+fn is_complete(statement: &str) -> bool {
+    quotes_balanced(statement) && statement.trim_end().ends_with(';')
+}
+
+/// Whether every quote in `statement` is closed.
+fn quotes_balanced(statement: &str) -> bool {
+    statement.bytes().filter(|byte| *byte == b'"').count() % 2 == 0
+}
+
 fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
     let mut output = Vec::new();
     let mut lines = text.lines().enumerate().peekable();
@@ -1543,9 +1556,9 @@ fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
             continue;
         }
         let keyword = split_keyword(statement).0;
-        if needs_semicolon(keyword) && !statement.trim_end().ends_with(';') {
+        if needs_semicolon(keyword) && !is_complete(statement) {
             let mut statement = statement.to_string();
-            while !statement.trim_end().ends_with(';') {
+            while !is_complete(&statement) {
                 let Some((_, next)) = lines.next() else {
                     return Err(Error::Parse {
                         line: index as u32 + 1,
@@ -1553,7 +1566,12 @@ fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
                     });
                 };
                 statement.push('\n');
-                statement.push_str(next.trim());
+                // A quoted string keeps its own line breaks; only text outside one is trimmed.
+                if quotes_balanced(&statement) {
+                    statement.push_str(next.trim());
+                } else {
+                    statement.push_str(next);
+                }
             }
             output.push((index as u32 + 1, Cow::Owned(statement)));
         } else {
@@ -2007,6 +2025,17 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// A comment may run over several lines, and a line inside one can end in `;`.
+    #[test]
+    fn a_quoted_string_may_span_lines() {
+        let text = "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 1 Node\n SG_ Value : 0|8@1+ (1,0) [0|0] \"\" Node\n\nCM_ SG_ 100 Value \"first; line\n\nsecond line\";\n";
+
+        let dbc = DBCFile::parse_str(text).expect("a comment that spans lines");
+
+        let message = &dbc.sources["Node"].messages[0];
+        assert_eq!(message.signals[0].comment, "first; line\n\nsecond line");
+    }
     use super::*;
 
     const SAMPLE: &str = r#"VERSION "1.0"
