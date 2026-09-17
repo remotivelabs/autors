@@ -1656,7 +1656,9 @@ fn parse_signal(rest: &str) -> Option<SignalType> {
         if multiplex == "M" {
             signal.set_multiplex_signal(true);
         } else if let Some(value) = multiplex.strip_prefix('m') {
-            signal.multiplex_value = value.parse().unwrap_or(0);
+            // Not `unwrap_or(0)`: zero is a mode a database can use, so a mode that does not fit
+            // would answer for a branch the frame never carried.
+            signal.multiplex_value = value.parse().ok()?;
             signal.set_multiplexed(true);
         }
     }
@@ -2025,6 +2027,19 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// A mode that does not fit is not read as zero: zero is a mode a database can use, so the
+    /// signal would answer for a branch the frame never carried. The line is dropped instead, as
+    /// any other `SG_` line this parser cannot read.
+    #[test]
+    fn a_multiplex_mode_that_does_not_fit_is_refused() {
+        let text = "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 2 Node\n SG_ Selector M : 0|8@1+ (1,0) [0|255] \"\" Node\n SG_ Value m18446744073709551615 : 8|8@1+ (1,0) [0|255] \"\" Node\n";
+
+        let dbc = DBCFile::parse_str(text).expect("the file itself is well formed");
+
+        // The signal is dropped rather than given a mode it does not have.
+        assert_eq!(dbc.sources["Node"].messages[0].signals.len(), 1);
+    }
 
     /// A comment may run over several lines, and a line inside one can end in `;`.
     #[test]
