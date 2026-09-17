@@ -258,3 +258,54 @@ fn a_partial_overlap_is_refused() {
 
     assert!(error.to_string().contains("overlaps"), "{error}");
 }
+
+/// Two identical modules on one bus reuse a frame identifier and are told apart by schedule.
+const SHARED_ID: &str = r#"
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Master, 5 ms, 0.1 ms;
+    Slaves: Module;
+}
+
+Signals {
+    LeftStatus: 8, 0, Module, Master;
+    RightStatus: 8, 0, Module, Master;
+}
+
+Frames {
+    Left: 0x02, Module, 1 { LeftStatus, 0; }
+    Right: 0x02, Module, 1 { RightStatus, 0; }
+}
+
+Schedule_tables {
+    LeftTable { Left delay 15 ms; }
+    RightTable { Right delay 15 ms; }
+}
+
+Node_attributes {
+    Module {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x04;
+        initial_NAD = 0x04;
+        product_id = 0xB0, 0xB003, 0;
+    }
+}
+"#;
+
+#[test]
+fn frames_share_an_id_until_one_schedule_sends_both() {
+    Ldf::parse_str(SHARED_ID).expect("each frame in a schedule of its own");
+
+    let together = SHARED_ID.replace(
+        "RightTable { Right delay 15 ms; }",
+        "RightTable { Left delay 15 ms; Right delay 15 ms; }",
+    );
+
+    let error = Ldf::parse_str(&together).unwrap_err();
+
+    assert!(error.to_string().contains("share ID"), "{error}");
+}
