@@ -555,6 +555,14 @@ impl Ldf {
         crate::parser::parse(input)
     }
 
+    /// Parses an LDF document without checking what it means.
+    ///
+    /// A program that reports what is wrong with a file needs the document to report it from, so
+    /// this parses what the syntax allows and leaves [`Ldf::validate`] to the caller.
+    pub fn parse_str_unvalidated(input: &str) -> Result<Self> {
+        crate::parser::parse_unvalidated(input)
+    }
+
     /// Reads and parses an UTF-8 LDF file.
     pub fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::parse_str(&std::fs::read_to_string(path)?)

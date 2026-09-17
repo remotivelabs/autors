@@ -309,3 +309,19 @@ fn frames_share_an_id_until_one_schedule_sends_both() {
 
     assert!(error.to_string().contains("share ID"), "{error}");
 }
+
+/// A document that does not hold together is still worth having, for a program that reports why.
+#[test]
+fn a_document_parses_even_when_it_does_not_hold_together() {
+    let broken = ALIAS.replace("DiagErrResp, 7;", "Missing, 7;");
+
+    assert!(Ldf::parse_str(&broken).is_err());
+
+    let ldf = Ldf::parse_str_unvalidated(&broken).unwrap();
+
+    assert_eq!(ldf.unconditional_frames["Report"].signals.len(), 2);
+    assert!(
+        ldf.validate().is_err(),
+        "the fault is still there to report"
+    );
+}

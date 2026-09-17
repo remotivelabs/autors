@@ -296,6 +296,12 @@ struct Parser {
 }
 
 pub(crate) fn parse(input: &str) -> Result<Ldf> {
+    let ldf = parse_unvalidated(input)?;
+    validate(&ldf)?;
+    Ok(ldf)
+}
+
+pub(crate) fn parse_unvalidated(input: &str) -> Result<Ldf> {
     let (tokens, comments) = Lexer::new(input).tokenize()?;
     let mut parser = Parser {
         tokens,
@@ -1078,7 +1084,6 @@ impl Parser {
             comments: self.builder.comments,
             has_node_attributes: self.builder.has_node_attributes,
         };
-        validate(&ldf)?;
         Ok(ldf)
     }
 
