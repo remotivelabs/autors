@@ -1522,12 +1522,27 @@ fn needs_semicolon(keyword: &str) -> bool {
     )
 }
 
-/// Whether a statement has ended: a `;` outside a quoted string.
+/// Whether a statement has ended: a `;` outside a quoted string, ignoring a trailing comment.
 ///
 /// A comment may run over several lines, and a line of one can end in `;` while the statement
-/// continues, so the semicolon alone does not say.
+/// continues, so the semicolon alone does not say. A statement may also be followed by a `//`
+/// comment, which is not part of it.
 fn is_complete(statement: &str) -> bool {
-    quotes_balanced(statement) && statement.trim_end().ends_with(';')
+    quotes_balanced(statement) && code(statement).trim_end().ends_with(';')
+}
+
+/// The statement without a trailing `//` comment. A `//` inside a string is text.
+fn code(statement: &str) -> &str {
+    let mut quoted = false;
+    let bytes = statement.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        match byte {
+            b'"' => quoted = !quoted,
+            b'/' if !quoted && bytes.get(index + 1) == Some(&b'/') => return &statement[..index],
+            _ => {}
+        }
+    }
+    statement
 }
 
 /// Whether every quote in `statement` is closed.
@@ -2029,6 +2044,24 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// A statement may be followed by a `//` comment, which does not make it unterminated.
+    #[test]
+    fn a_trailing_comment_does_not_swallow_the_next_statement() {
+        let text = "VERSION \"\"\n\nBU_: ECU\n\nBO_ 100 M: 1 ECU\n SG_ S : 0|8@1+ (1,0) [0|1] \"\" ECU\n\nBA_DEF_ BO_ \"Cycle\" FLOAT 0 300000; // [ms]\nBA_DEF_ SG_ \"Fn\" ENUM \"A\",\"B\";\nBA_ \"Fn\" SG_ 100 S 1;\n";
+
+        let dbc = DBCFile::parse_str(text).expect("parses");
+
+        assert!(
+            dbc.attribute_definitions.contains_key("Fn"),
+            "the definition after the comment"
+        );
+        let signal = &dbc.sources["ECU"].messages[0].signals[0];
+        assert_eq!(
+            signal.attributes["Fn"].display(dbc.attribute_definitions.get("Fn")),
+            "B"
+        );
+    }
 
     /// Whitespace inside `(factor, offset)` and `[min|max]` is ordinary formatting.
     #[test]
