@@ -1077,7 +1077,7 @@ pub struct DBCFile {
     pub value_tables: IndexMap<String, ValueTable>,
     pub environments: BTreeMap<String, EnvironmentType>,
     pub attribute_definitions: BTreeMap<String, AttribDefType>,
-    pub signal_groups: IndexMap<u32, SignalGroupType>,
+    pub signal_groups: IndexMap<String, SignalGroupType>,
     pub attributes: IndexMap<String, AttributeType>,
 }
 
@@ -1186,7 +1186,7 @@ impl DBCFile {
                 "VAL_" => parse_signal_values(&mut file, &message_locations, rest),
                 "SIG_GROUP_" => {
                     if let Some(group) = parse_signal_group(rest) {
-                        file.signal_groups.insert(group.id, group);
+                        file.signal_groups.insert(group.name.clone(), group);
                     }
                 }
                 "SIG_VALTYPE_" => parse_signal_float_type(&mut file, &message_locations, rest),
@@ -2045,6 +2045,18 @@ fn find_signal_mut<'a>(
 #[cfg(test)]
 mod tests {
 
+    /// A message may declare more than one signal group, and each carries its own protection.
+    #[test]
+    fn a_message_keeps_every_signal_group_it_declares() {
+        let text = "VERSION \"\"\n\nBU_: ECU\n\nBO_ 201 M: 8 ECU\n SG_ A : 0|8@1+ (1,0) [0|1] \"\" ECU\n SG_ B : 8|8@1+ (1,0) [0|1] \"\" ECU\n\nSIG_GROUP_ 201 GroupOne 1 : A;\nSIG_GROUP_ 201 GroupTwo 1 : B;\n";
+
+        let dbc = DBCFile::parse_str(text).expect("parses");
+
+        assert_eq!(dbc.signal_groups.len(), 2);
+        assert_eq!(dbc.signal_groups["GroupOne"].signal_refs, ["A"]);
+        assert_eq!(dbc.signal_groups["GroupTwo"].signal_refs, ["B"]);
+    }
+
     /// A statement may be followed by a `//` comment, which does not make it unterminated.
     #[test]
     fn a_trailing_comment_does_not_swallow_the_next_statement() {
@@ -2137,7 +2149,7 @@ SIG_VALTYPE_ 100 Val : 2;
         assert_eq!(signal.len, 64);
         assert_eq!(signal.enums.as_ref().unwrap()[&1], "One");
         assert_eq!(file.environments["Env"].access, EnvAccessType::Write);
-        assert_eq!(file.signal_groups[&100].signal_refs, ["Val", "Mux"]);
+        assert_eq!(file.signal_groups["Group"].signal_refs, ["Val", "Mux"]);
     }
 
     #[test]
