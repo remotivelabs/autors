@@ -115,6 +115,7 @@ impl<'a> Cur<'a> {
     }
 
     fn expect(&mut self, c: char) -> Option<()> {
+        self.skip_ws();
         if self.peek() == Some(c) {
             self.pos += c.len_utf8();
             Some(())
@@ -134,6 +135,7 @@ impl<'a> Cur<'a> {
 
     /// Numeric token (`[\d.\-+Ee]+`).
     fn num_token(&mut self) -> &'a str {
+        self.skip_ws();
         let start = self.pos;
         while matches!(self.peek(), Some(c) if is_num_char(c)) {
             self.pos += 1;
@@ -2027,6 +2029,19 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// Whitespace inside `(factor, offset)` and `[min|max]` is ordinary formatting.
+    #[test]
+    fn a_signal_reads_with_spaces_around_its_numbers() {
+        let spaced = "VERSION \"\"\n\nBU_: ECU\n\nBO_ 100 Msg: 2 ECU\n SG_ Value : 7|16@0+ (1.0, 0.0) [0.0 | 65535.0] \"u\" ECU\n";
+
+        let dbc = DBCFile::parse_str(spaced).expect("spaces are formatting");
+
+        let signal = &dbc.sources["ECU"].messages[0].signals[0];
+        assert_eq!(signal.name, "Value");
+        assert_eq!(signal.factor, 1.0);
+        assert_eq!(signal.max, 65535.0);
+    }
 
     /// A mode that does not fit is not read as zero: zero is a mode a database can use, so the
     /// signal would answer for a branch the frame never carried. The line is dropped instead, as
