@@ -1828,27 +1828,35 @@ fn parse_attribute(
     let Some(name) = cursor.quoted().map(str::to_string) else {
         return;
     };
-    let Some(definition) = file.attribute_definitions.get(&name).cloned() else {
-        return;
-    };
+    // The definition is not required here: a file may write its values before its definitions, or
+    // never define an attribute it sets, and the value is worth keeping either way. An `ENUM`
+    // index is resolved later, by `AttributeType::display`, which takes the definition.
+    let definition = file.attribute_definitions.get(&name).cloned();
     cursor.skip_ws();
-    let target_keyword = if definition.object_type == AttribDefObjectType::Network {
+    let object_type = definition
+        .as_ref()
+        .map_or(AttribDefObjectType::Network, |d| d.object_type);
+    let target_keyword = if definition.is_some() && object_type == AttribDefObjectType::Network {
         None
     } else {
         let keyword = cursor.token().trim_end_matches(';').to_string();
         cursor.skip_ws();
         Some(keyword)
     };
-    let string_value = definition.data_type == AttribDefValueType::Str;
+    // A quoted value is a string, whatever the definition says it is.
     let read_value = |cursor: &mut Cur<'_>| -> Option<String> {
         cursor.skip_ws();
-        if string_value {
+        if cursor.peek() == Some('"') {
             cursor.quoted().map(str::to_string)
         } else {
-            Some(trim_qs(cursor.token()).to_string())
+            Some(trim_qs(cursor.token().trim_end_matches(';')).to_string())
         }
     };
-    match (definition.object_type, target_keyword.as_deref()) {
+    let object_type = target_keyword
+        .as_deref()
+        .and_then(AttribDefObjectType::from_keyword)
+        .unwrap_or(object_type);
+    match (object_type, target_keyword.as_deref()) {
         (AttribDefObjectType::Network, _) => {
             if let Some(value) = read_value(&mut cursor) {
                 file.attributes
@@ -2044,6 +2052,18 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// A file may write its values before its definitions, or never define what it sets.
+    #[test]
+    fn an_attribute_is_kept_without_its_definition() {
+        let text = "VERSION \"\"\n\nBU_: ECU\n\nBO_ 100 M: 1 ECU\n SG_ S : 0|8@1+ (1,0) [0|1] \"\" ECU\n\nBA_ \"Cycle\" BO_ 100 1000.000;\nBA_ \"Undefined\" BO_ 100 7;\nBA_DEF_ BO_ \"Cycle\" FLOAT 0 300000;\n";
+
+        let dbc = DBCFile::parse_str(text).expect("parses");
+
+        let message = &dbc.sources["ECU"].messages[0];
+        assert_eq!(message.attributes["Cycle"].value, "1000.000");
+        assert_eq!(message.attributes["Undefined"].value, "7");
+    }
 
     /// A message may declare more than one signal group, and each carries its own protection.
     #[test]
