@@ -202,3 +202,59 @@ fn a_placeholder_means_the_attribute_has_no_value() {
 
     assert_eq!(ldf.slaves["Slave"].response_error, None);
 }
+
+/// A slave publishes a response-error signal in one of its frames, and a file names a bit it
+/// already has, so one bit range carries two names.
+const ALIAS: &str = r#"
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Master, 5 ms, 0.1 ms;
+    Slaves: Slave;
+}
+
+Signals {
+    DiagErrResp: 1, 0, Slave, Master;
+    ErrRespSlave: 1, 0, Slave, Master;
+}
+
+Frames {
+    Report: 0x01, Slave, 1 {
+        DiagErrResp, 7;
+        ErrRespSlave, 7;
+    }
+}
+
+Node_attributes {
+    Slave {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x03;
+        initial_NAD = 0x03;
+        product_id = 0xB0, 0xB002, 0;
+        response_error = ErrRespSlave;
+    }
+}
+"#;
+
+#[test]
+fn an_alias_is_not_an_overlap() {
+    let ldf = Ldf::parse_str(ALIAS).unwrap();
+
+    assert_eq!(ldf.unconditional_frames["Report"].signals.len(), 2);
+}
+
+#[test]
+fn a_partial_overlap_is_refused() {
+    let collides = ALIAS
+        .replace("DiagErrResp: 1, 0", "DiagErrResp: 4, 0")
+        .replace("ErrRespSlave: 1, 0", "ErrRespSlave: 4, 0")
+        .replace("DiagErrResp, 7;", "DiagErrResp, 0;")
+        .replace("ErrRespSlave, 7;", "ErrRespSlave, 2;");
+
+    let error = Ldf::parse_str(&collides).unwrap_err();
+
+    assert!(error.to_string().contains("overlaps"), "{error}");
+}

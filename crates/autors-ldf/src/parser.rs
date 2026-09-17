@@ -1462,7 +1462,7 @@ fn validate_layout(
     let mut ordered = placements.to_vec();
     ordered.sort_by_key(|placement| placement.bit_offset);
     let mut end = 0_u16;
-    let mut previous = None::<&str>;
+    let mut previous: Option<(&str, u16, u8)> = None;
     for placement in &ordered {
         let signal = signals.get(&placement.signal).ok_or_else(|| {
             Error::Invalid(format!(
@@ -1470,21 +1470,27 @@ fn validate_layout(
                 placement.signal
             ))
         })?;
-        if placement.bit_offset < end {
+        // Two names for one bit range is an alias, which the protocol asks for: a slave publishes
+        // a response-error signal in one of its frames, and a file often names a bit it already
+        // has. A partial overlap, where the ranges differ, is a real collision.
+        let alias = previous.is_some_and(|(_, offset, width)| {
+            offset == placement.bit_offset && width == signal.width
+        });
+        if placement.bit_offset < end && !alias {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} overlaps {}",
                 signal.name,
-                previous.unwrap_or("a previous signal")
+                previous.map_or("a previous signal", |(name, _, _)| name)
             )));
         }
-        end = placement.bit_offset + u16::from(signal.width);
+        end = end.max(placement.bit_offset + u16::from(signal.width));
         if end > u16::from(length) * 8 {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} extends beyond the payload",
                 signal.name
             )));
         }
-        previous = Some(&signal.name);
+        previous = Some((&signal.name, placement.bit_offset, signal.width));
     }
     Ok(())
 }
