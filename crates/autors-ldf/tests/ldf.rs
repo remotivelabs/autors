@@ -329,3 +329,46 @@ fn a_document_parses_even_when_it_does_not_hold_together() {
         "the fault is still there to report"
     );
 }
+
+/// A placeholder node, standing for whichever ECU, has no attributes. The specification wants
+/// an entry for every slave from LIN 2.0 on, so the strict path says so; the lenient path reads
+/// the frames and leaves the attributes at their defaults.
+const NODE_WITHOUT_ATTRIBUTES: &str = r#"
+LIN_description_file;
+LIN_protocol_version = "2.1";
+LIN_language_version = "2.1";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: DEVM, 5 ms, 0.1 ms;
+    Slaves: DEVS1, ANY;
+}
+
+Signals {
+    CRC: 8, 0, ANY;
+}
+
+Frames {
+    Protected: 0x20, ANY, 4 {
+        CRC, 0;
+    }
+}
+
+Node_attributes {
+    DEVS1 {
+        LIN_protocol = "2.1";
+        configured_NAD = 0x01;
+        product_id = 0x0001, 0x0001, 0;
+    }
+}
+"#;
+
+#[test]
+fn a_slave_without_attributes_is_refused_strictly_and_read_leniently() {
+    let error = Ldf::parse_str(NODE_WITHOUT_ATTRIBUTES).unwrap_err();
+    assert!(error.to_string().contains("has no LIN_protocol"), "{error}");
+
+    let ldf = Ldf::parse_str_unvalidated(NODE_WITHOUT_ATTRIBUTES).unwrap();
+    assert!(ldf.slaves.contains_key("ANY"));
+    assert_eq!(ldf.unconditional_frames["Protected"].signals.len(), 1);
+}

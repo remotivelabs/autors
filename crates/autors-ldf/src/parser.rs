@@ -296,12 +296,19 @@ struct Parser {
 }
 
 pub(crate) fn parse(input: &str) -> Result<Ldf> {
-    let ldf = parse_unvalidated(input)?;
+    let ldf = lower(input, true)?;
     validate(&ldf)?;
     Ok(ldf)
 }
 
 pub(crate) fn parse_unvalidated(input: &str) -> Result<Ldf> {
+    lower(input, false)
+}
+
+/// Parses the text into a document. `strict` keeps the rules the specification states about a
+/// node's attributes, which the model cannot check afterwards because it fills in what a file
+/// leaves out; a lenient reader takes the file as it is.
+fn lower(input: &str, strict: bool) -> Result<Ldf> {
     let (tokens, comments) = Lexer::new(input).tokenize()?;
     let mut parser = Parser {
         tokens,
@@ -312,7 +319,7 @@ pub(crate) fn parse_unvalidated(input: &str) -> Result<Ldf> {
         },
     };
     parser.document()?;
-    parser.finish()
+    parser.finish(strict)
 }
 
 impl Parser {
@@ -940,7 +947,7 @@ impl Parser {
         Ok(())
     }
 
-    fn finish(mut self) -> Result<Ldf> {
+    fn finish(mut self, strict: bool) -> Result<Ldf> {
         let protocol_version = self
             .builder
             .protocol_version
@@ -991,23 +998,33 @@ impl Parser {
                 .slave_attributes
                 .swap_remove(name)
                 .unwrap_or_default();
-            if language_version >= LinVersion::LIN_2_0 && !self.builder.has_node_attributes {
+            if strict
+                && language_version >= LinVersion::LIN_2_0
+                && !self.builder.has_node_attributes
+            {
                 return Err(Error::Invalid(
                     "Node_attributes is required for LIN 2.0 and newer".to_string(),
                 ));
             }
-            if language_version >= LinVersion::LIN_2_0 && attributes.protocol_version.is_none() {
+            if strict
+                && language_version >= LinVersion::LIN_2_0
+                && attributes.protocol_version.is_none()
+            {
                 return Err(Error::Invalid(format!("node {name:?} has no LIN_protocol")));
             }
             let node_protocol = attributes
                 .protocol_version
                 .unwrap_or_else(|| protocol_version.clone());
-            if language_version >= LinVersion::LIN_2_0 && attributes.configured_nad.is_none() {
+            if strict
+                && language_version >= LinVersion::LIN_2_0
+                && attributes.configured_nad.is_none()
+            {
                 return Err(Error::Invalid(format!(
                     "node {name:?} has no configured_NAD"
                 )));
             }
-            if language_version >= LinVersion::LIN_2_1 && attributes.product_id.is_none() {
+            if strict && language_version >= LinVersion::LIN_2_1 && attributes.product_id.is_none()
+            {
                 return Err(Error::Invalid(format!("node {name:?} has no product_id")));
             }
             let configured_nad = attributes
