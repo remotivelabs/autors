@@ -239,11 +239,17 @@ Node_attributes {
 }
 "#;
 
+/// The specification says signals in a frame do not overlap, and an alias is an overlap, so the
+/// strict path refuses it. The lenient path reads what the file says, for a reader that has to
+/// take what production tool chains write.
 #[test]
-fn an_alias_is_not_an_overlap() {
-    let ldf = Ldf::parse_str(ALIAS).unwrap();
+fn an_alias_is_refused_strictly_and_read_leniently() {
+    let error = Ldf::parse_str(ALIAS).unwrap_err();
+    assert!(error.to_string().contains("overlaps"), "{error}");
 
+    let ldf = Ldf::parse_str_unvalidated(ALIAS).unwrap();
     assert_eq!(ldf.unconditional_frames["Report"].signals.len(), 2);
+    assert!(ldf.validate().is_err());
 }
 
 #[test]
@@ -296,18 +302,16 @@ Node_attributes {
 }
 "#;
 
+/// The specification gives every frame its own identifier, so the strict path refuses two frames
+/// that share one, whatever the schedule tables do. The lenient path reads both.
 #[test]
-fn frames_share_an_id_until_one_schedule_sends_both() {
-    Ldf::parse_str(SHARED_ID).expect("each frame in a schedule of its own");
-
-    let together = SHARED_ID.replace(
-        "RightTable { Right delay 15 ms; }",
-        "RightTable { Left delay 15 ms; Right delay 15 ms; }",
-    );
-
-    let error = Ldf::parse_str(&together).unwrap_err();
-
+fn frames_sharing_an_identifier_are_refused_strictly_and_read_leniently() {
+    let error = Ldf::parse_str(SHARED_ID).unwrap_err();
     assert!(error.to_string().contains("share ID"), "{error}");
+
+    let ldf = Ldf::parse_str_unvalidated(SHARED_ID).unwrap();
+    assert_eq!(ldf.unconditional_frames.len(), 2);
+    assert!(ldf.validate().is_err());
 }
 
 /// A document that does not hold together is still worth having, for a program that reports why.

@@ -1344,7 +1344,7 @@ pub(crate) fn validate(ldf: &Ldf) -> Result<()> {
             }
         }
     }
-    let mut ids = IndexMap::<u8, Vec<String>>::new();
+    let mut ids = IndexMap::<u8, String>::new();
     for frame in ldf.unconditional_frames.values() {
         if !node_exists(&frame.publisher) {
             return Err(Error::Invalid(format!(
@@ -1353,10 +1353,10 @@ pub(crate) fn validate(ldf: &Ldf) -> Result<()> {
             )));
         }
         validate_layout(&frame.name, frame.length, &frame.signals, &ldf.signals)?;
-        insert_frame_id(&mut ids, frame.id, &frame.name);
+        insert_frame_id(&mut ids, frame.id, &frame.name)?;
     }
     for frame in ldf.event_triggered_frames.values() {
-        insert_frame_id(&mut ids, frame.id, &frame.name);
+        insert_frame_id(&mut ids, frame.id, &frame.name)?;
         for referenced in &frame.frames {
             if !ldf.unconditional_frames.contains_key(referenced) {
                 return Err(Error::Invalid(format!(
@@ -1386,7 +1386,7 @@ pub(crate) fn validate(ldf: &Ldf) -> Result<()> {
     }
     for frame in ldf.diagnostic_frames.values() {
         validate_layout(&frame.name, 8, &frame.signals, &ldf.diagnostic_signals)?;
-        insert_frame_id(&mut ids, frame.id, &frame.name);
+        insert_frame_id(&mut ids, frame.id, &frame.name)?;
     }
     for slave in ldf.slaves.values() {
         if let Some(signal) = &slave.response_error {
@@ -1441,40 +1441,14 @@ pub(crate) fn validate(ldf: &Ldf) -> Result<()> {
             }
         }
     }
-    validate_frame_ids(ldf, &ids)?;
     Ok(())
 }
 
-fn insert_frame_id(ids: &mut IndexMap<u8, Vec<String>>, id: u8, name: &str) {
-    ids.entry(id).or_default().push(name.to_string());
-}
-
-/// Two frames may share an identifier as long as no schedule table sends both.
-///
-/// That is how two identical modules on one bus are addressed: the master switches schedule, not
-/// identifier. Sending both from one table is a real collision, since the identifier is all a
-/// slave has to go on.
-fn validate_frame_ids(ldf: &Ldf, ids: &IndexMap<u8, Vec<String>>) -> Result<()> {
-    for (id, names) in ids {
-        if names.len() < 2 {
-            continue;
-        }
-        for table in ldf.schedule_tables.values() {
-            let sent: Vec<&String> = names
-                .iter()
-                .filter(|name| {
-                    table.entries.iter().any(|entry| {
-                        matches!(&entry.command, ScheduleCommand::Frame(frame) if frame == *name)
-                    })
-                })
-                .collect();
-            if let [first, second, ..] = sent[..] {
-                return Err(Error::Invalid(format!(
-                    "schedule table {:?} sends both {first:?} and {second:?}, which share ID {id:#x}",
-                    table.name
-                )));
-            }
-        }
+fn insert_frame_id(ids: &mut IndexMap<u8, String>, id: u8, name: &str) -> Result<()> {
+    if let Some(previous) = ids.insert(id, name.to_string()) {
+        return Err(Error::Invalid(format!(
+            "frames {previous:?} and {name:?} share ID {id:#x}"
+        )));
     }
     Ok(())
 }
@@ -1493,7 +1467,7 @@ fn validate_layout(
     let mut ordered = placements.to_vec();
     ordered.sort_by_key(|placement| placement.bit_offset);
     let mut end = 0_u16;
-    let mut previous: Option<(&str, u16, u8)> = None;
+    let mut previous = None::<&str>;
     for placement in &ordered {
         let signal = signals.get(&placement.signal).ok_or_else(|| {
             Error::Invalid(format!(
@@ -1501,27 +1475,21 @@ fn validate_layout(
                 placement.signal
             ))
         })?;
-        // Two names for one bit range is an alias, which the protocol asks for: a slave publishes
-        // a response-error signal in one of its frames, and a file often names a bit it already
-        // has. A partial overlap, where the ranges differ, is a real collision.
-        let alias = previous.is_some_and(|(_, offset, width)| {
-            offset == placement.bit_offset && width == signal.width
-        });
-        if placement.bit_offset < end && !alias {
+        if placement.bit_offset < end {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} overlaps {}",
                 signal.name,
-                previous.map_or("a previous signal", |(name, _, _)| name)
+                previous.unwrap_or("a previous signal")
             )));
         }
-        end = end.max(placement.bit_offset + u16::from(signal.width));
+        end = placement.bit_offset + u16::from(signal.width);
         if end > u16::from(length) * 8 {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} extends beyond the payload",
                 signal.name
             )));
         }
-        previous = Some((&signal.name, placement.bit_offset, signal.width));
+        previous = Some(&signal.name);
     }
     Ok(())
 }
