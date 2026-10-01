@@ -1836,12 +1836,22 @@ fn parse_attribute(
     let object_type = definition
         .as_ref()
         .map_or(AttribDefObjectType::Network, |d| d.object_type);
+    // Without a network definition the next token may be a target keyword or the value itself,
+    // so it is taken as a keyword only when it is one of the four objects `BA_` names; the
+    // relation keywords belong to `BA_REL_`.
     let target_keyword = if definition.is_some() && object_type == AttribDefObjectType::Network {
         None
     } else {
-        let keyword = cursor.token().trim_end_matches(';').to_string();
-        cursor.skip_ws();
-        Some(keyword)
+        let mut ahead = Cur {
+            s: cursor.s,
+            pos: cursor.pos,
+        };
+        let token = ahead.token().trim_end_matches(';');
+        matches!(token, "BU_" | "BO_" | "SG_" | "EV_").then(|| {
+            cursor = ahead;
+            cursor.skip_ws();
+            token.to_string()
+        })
     };
     // A quoted value is a string, whatever the definition says it is.
     let read_value = |cursor: &mut Cur<'_>| -> Option<String> {
@@ -2063,6 +2073,19 @@ mod tests {
         let message = &dbc.sources["ECU"].messages[0];
         assert_eq!(message.attributes["Cycle"].value, "1000.000");
         assert_eq!(message.attributes["Undefined"].value, "7");
+    }
+
+    /// A network attribute written before its definition, or never defined, keeps its value, and
+    /// so does a quoted one.
+    #[test]
+    fn a_network_attribute_is_kept_without_its_definition() {
+        let text = "VERSION \"\"\n\nBU_: ECU\n\nBA_ \"Rate\" 500000;\nBA_ \"Name\" \"Body\";\nBA_ \"Later\" 7;\nBA_DEF_ \"Later\" INT 0 10;\n";
+
+        let dbc = DBCFile::parse_str(text).expect("parses");
+
+        assert_eq!(dbc.attributes["Rate"].value, "500000");
+        assert_eq!(dbc.attributes["Name"].value, "Body");
+        assert_eq!(dbc.attributes["Later"].value, "7");
     }
 
     /// A message may declare more than one signal group, and each carries its own protection.
