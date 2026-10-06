@@ -69,9 +69,9 @@ fn trim_qs(s: &str) -> &str {
     s.trim_matches(|c| c == '"' || c == ';')
 }
 
-/// Parse a number token; unparseable tokens yield 0.0.
-fn pnum(tok: &str) -> f64 {
-    tok.parse().unwrap_or(0.0)
+/// Parse a number token.
+fn pnum(tok: &str) -> Option<f64> {
+    tok.parse().ok()
 }
 
 /// Characters accepted in a numeric token.
@@ -1635,15 +1635,15 @@ fn parse_signal(rest: &str) -> Option<SignalType> {
     cursor.pos += sign.len_utf8();
     cursor.skip_ws();
     cursor.expect('(')?;
-    let factor = pnum(cursor.num_token());
+    let factor = pnum(cursor.num_token())?;
     cursor.expect(',')?;
-    let offset = pnum(cursor.num_token());
+    let offset = pnum(cursor.num_token())?;
     cursor.expect(')')?;
     cursor.skip_ws();
     cursor.expect('[')?;
-    let min = pnum(cursor.num_token());
+    let min = pnum(cursor.num_token())?;
     cursor.expect('|')?;
-    let max = pnum(cursor.num_token());
+    let max = pnum(cursor.num_token())?;
     cursor.expect(']')?;
     cursor.skip_ws();
     let unit = cursor.quoted()?.to_string();
@@ -1689,14 +1689,14 @@ fn parse_environment(rest: &str) -> Option<EnvironmentType> {
     let env_type = EnvType::from_i32(cursor.num_token().parse().ok()?);
     cursor.skip_ws();
     cursor.expect('[')?;
-    let min = pnum(cursor.num_token());
+    let min = pnum(cursor.num_token())?;
     cursor.expect('|')?;
-    let max = pnum(cursor.num_token());
+    let max = pnum(cursor.num_token())?;
     cursor.expect(']')?;
     cursor.skip_ws();
     let unit = cursor.quoted()?.to_string();
     cursor.skip_ws();
-    let start_value = pnum(cursor.num_token());
+    let start_value = pnum(cursor.num_token())?;
     cursor.skip_ws();
     let index = cursor.num_token().parse().unwrap_or(0);
     cursor.skip_ws();
@@ -1777,9 +1777,9 @@ fn parse_attribute_definition(rest: &str) -> Option<AttribDefType> {
     };
     match data_type {
         AttribDefValueType::Int | AttribDefValueType::Float | AttribDefValueType::Hex => {
-            definition.min = pnum(cursor.num_token());
+            definition.min = pnum(cursor.num_token())?;
             cursor.skip_ws();
-            definition.max = pnum(cursor.num_token());
+            definition.max = pnum(cursor.num_token())?;
         }
         AttribDefValueType::Enum => {
             let mut rest = cursor.rest().trim().trim_end_matches(';');
@@ -2062,6 +2062,77 @@ fn find_signal_mut<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    /// A number this parser cannot read is not read as zero: a factor of zero makes every
+    /// physical value the offset, and nothing says the file was wrong. The line is dropped
+    /// instead, as any other `SG_` line this parser cannot read.
+    #[test]
+    fn a_signal_whose_number_does_not_parse_is_refused() {
+        for (field, broken) in [
+            ("factor", "(1.2.3,7) [0|0]"),
+            ("offset", "(1,1.2.3) [0|0]"),
+            ("minimum", "(1,7) [1.2.3|0]"),
+            ("maximum", "(1,7) [0|1.2.3]"),
+        ] {
+            let text = format!(
+                "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 2 Node\n SG_ Broken : 0|8@1+ {broken} \"\" Node\n SG_ Value : 8|8@1+ (1,0) [0|255] \"\" Node\n"
+            );
+
+            let dbc = DBCFile::parse_str(&text).expect("the file itself is well formed");
+
+            let signals = &dbc.sources["Node"].messages[0].signals;
+            let names: Vec<_> = signals.iter().map(|signal| signal.name.as_str()).collect();
+            assert_eq!(names, ["Value"], "a signal with a broken {field}");
+        }
+    }
+
+    /// An environment variable whose number does not parse is dropped, not read as zero.
+    #[test]
+    fn an_environment_variable_whose_number_does_not_parse_is_refused() {
+        for (field, broken) in [
+            ("minimum", "[1.2.3|10] \"\" 0"),
+            ("maximum", "[0|1.2.3] \"\" 0"),
+            ("start value", "[0|10] \"\" 1.2.3"),
+        ] {
+            let text = format!(
+                "VERSION \"\"\n\nBU_: Node\n\nEV_ Broken: 0 {broken} 1 DUMMY_NODE_VECTOR0 Node;\nEV_ Valid: 0 [0|10] \"\" 5 2 DUMMY_NODE_VECTOR0 Node;\n"
+            );
+
+            let dbc = DBCFile::parse_str(&text).expect("the file itself is well formed");
+
+            let names: Vec<_> = dbc.environments.keys().map(String::as_str).collect();
+            assert_eq!(
+                names,
+                ["Valid"],
+                "an environment variable with a broken {field}"
+            );
+        }
+    }
+
+    /// A numeric attribute definition whose bound does not parse is dropped, not read as zero.
+    #[test]
+    fn an_attribute_definition_whose_bound_does_not_parse_is_refused() {
+        for value_type in ["INT", "FLOAT", "HEX"] {
+            for (field, broken) in [("minimum", "1.2.3 10"), ("maximum", "0 1.2.3")] {
+                let text = format!(
+                    "VERSION \"\"\n\nBU_: Node\n\nBA_DEF_ SG_ \"Broken\" {value_type} {broken};\nBA_DEF_ SG_ \"Valid\" {value_type} 0 10;\n"
+                );
+
+                let dbc = DBCFile::parse_str(&text).expect("the file itself is well formed");
+
+                let names: Vec<_> = dbc
+                    .attribute_definitions
+                    .keys()
+                    .map(String::as_str)
+                    .collect();
+                assert_eq!(
+                    names,
+                    ["Valid"],
+                    "a definition of type {value_type} with a broken {field}"
+                );
+            }
+        }
+    }
 
     /// A file may write its values before its definitions, or never define what it sets.
     #[test]
