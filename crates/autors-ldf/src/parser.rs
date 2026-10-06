@@ -1123,7 +1123,8 @@ impl Parser {
         if !value.is_finite() || value < 0.0 {
             return Err(Error::Invalid(format!("invalid duration {value} ms")));
         }
-        Ok(Duration::from_secs_f64(value / 1000.0))
+        Duration::try_from_secs_f64(value / 1000.0)
+            .map_err(|_| Error::Invalid(format!("invalid duration {value} ms")))
     }
 
     fn percent(&mut self) -> Result<f64> {

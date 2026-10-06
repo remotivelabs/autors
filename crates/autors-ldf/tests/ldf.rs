@@ -427,3 +427,14 @@ fn a_frame_whose_signal_lies_outside_the_payload_does_not_encode_or_decode() {
     let error = ldf.encode_frame_raw("F", &SignalValues::new()).unwrap_err();
     assert!(matches!(error, Error::Codec(_)), "{error}");
 }
+
+/// A finite number can still be more milliseconds than a `Duration` holds.
+#[test]
+fn a_duration_too_large_to_hold_is_refused() {
+    let huge = ALIAS.replace("Master: Master, 5 ms", "Master: Master, 1e300 ms");
+
+    for parse in [Ldf::parse_str, Ldf::parse_str_unvalidated] {
+        let error = parse(&huge).unwrap_err();
+        assert!(matches!(error, Error::Invalid(_)), "{error}");
+    }
+}
