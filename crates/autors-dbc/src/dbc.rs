@@ -167,13 +167,24 @@ impl<'a> Cur<'a> {
         &self.s[start..self.pos]
     }
 
-    /// Quoted string `"..."`; returns the contents, `None` when unquoted.
+    /// Quoted string `"..."`; returns the contents as written, `None` when unquoted or
+    /// unterminated. A `\"` inside is text and keeps its backslash.
     fn quoted(&mut self) -> Option<&'a str> {
         self.expect('"')?;
         let start = self.pos;
-        let end = self.s[start..].find('"')? + start;
-        self.pos = end + 1;
-        Some(&self.s[start..end])
+        let mut escaped = false;
+        for (offset, c) in self.s[start..].char_indices() {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                let end = start + offset;
+                self.pos = end + 1;
+                return Some(&self.s[start..end]);
+            }
+        }
+        None
     }
 }
 
@@ -1491,18 +1502,63 @@ fn split_keyword(line: &str) -> (&str, &str) {
 }
 
 fn statement_has_unterminated_quote(statement: &str) -> bool {
-    let mut escaped = false;
-    let mut quoted = false;
-    for character in statement.chars() {
-        if escaped {
-            escaped = false;
-        } else if character == '\\' && quoted {
-            escaped = true;
-        } else if character == '"' {
-            quoted = !quoted;
+    let mut scanner = StatementScanner::default();
+    scanner.read(statement);
+    scanner.quoted
+}
+
+/// Where a reader is in a statement. A statement that continues over several lines is read
+/// once: each line is read from where the one before left off.
+#[derive(Default)]
+struct StatementScanner {
+    quoted: bool,
+    escaped: bool,
+    commented: bool,
+    /// The code so far, less whitespace and comments, ends in `;`.
+    ended: bool,
+}
+
+impl StatementScanner {
+    fn read(&mut self, text: &str) {
+        let mut characters = text.chars().peekable();
+        while let Some(character) = characters.next() {
+            if character == '\n' {
+                self.commented = false;
+            }
+            if self.commented {
+                continue;
+            }
+            if self.escaped {
+                self.escaped = false;
+            } else if self.quoted {
+                match character {
+                    '\\' => self.escaped = true,
+                    '"' => self.quoted = false,
+                    _ => {}
+                }
+            } else {
+                match character {
+                    '"' => {
+                        self.quoted = true;
+                        self.ended = false;
+                    }
+                    '/' if characters.peek() == Some(&'/') => self.commented = true,
+                    character if character.is_whitespace() => {}
+                    character => self.ended = character == ';',
+                }
+            }
         }
     }
-    quoted
+
+    /// Whether the statement has ended: a `;` outside a quoted string, ignoring a trailing
+    /// comment.
+    ///
+    /// A comment may run over several lines, and a line of one can end in `;` while the
+    /// statement continues, so the semicolon alone does not say. A statement may also be
+    /// followed by a `//` comment, which is not part of it.
+    fn complete(&self) -> bool {
+        !self.quoted && self.ended
+    }
 }
 
 fn needs_semicolon(keyword: &str) -> bool {
@@ -1520,34 +1576,6 @@ fn needs_semicolon(keyword: &str) -> bool {
             | "SIG_GROUP_"
             | "SIG_VALTYPE_"
     )
-}
-
-/// Whether a statement has ended: a `;` outside a quoted string, ignoring a trailing comment.
-///
-/// A comment may run over several lines, and a line of one can end in `;` while the statement
-/// continues, so the semicolon alone does not say. A statement may also be followed by a `//`
-/// comment, which is not part of it.
-fn is_complete(statement: &str) -> bool {
-    quotes_balanced(statement) && code(statement).trim_end().ends_with(';')
-}
-
-/// The statement without a trailing `//` comment. A `//` inside a string is text.
-fn code(statement: &str) -> &str {
-    let mut quoted = false;
-    let bytes = statement.as_bytes();
-    for (index, byte) in bytes.iter().enumerate() {
-        match byte {
-            b'"' => quoted = !quoted,
-            b'/' if !quoted && bytes.get(index + 1) == Some(&b'/') => return &statement[..index],
-            _ => {}
-        }
-    }
-    statement
-}
-
-/// Whether every quote in `statement` is closed.
-fn quotes_balanced(statement: &str) -> bool {
-    statement.bytes().filter(|byte| *byte == b'"').count() % 2 == 0
 }
 
 fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
@@ -1573,9 +1601,11 @@ fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
             continue;
         }
         let keyword = split_keyword(statement).0;
-        if needs_semicolon(keyword) && !is_complete(statement) {
+        let mut scanner = StatementScanner::default();
+        scanner.read(statement);
+        if needs_semicolon(keyword) && !scanner.complete() {
             let mut statement = statement.to_string();
-            while !is_complete(&statement) {
+            while !scanner.complete() {
                 let Some((_, next)) = lines.next() else {
                     return Err(Error::Parse {
                         line: index as u32 + 1,
@@ -1583,12 +1613,11 @@ fn logical_lines(text: &str) -> Result<Vec<(u32, Cow<'_, str>)>> {
                     });
                 };
                 statement.push('\n');
+                scanner.read("\n");
                 // A quoted string keeps its own line breaks; only text outside one is trimmed.
-                if quotes_balanced(&statement) {
-                    statement.push_str(next.trim());
-                } else {
-                    statement.push_str(next);
-                }
+                let next = if scanner.quoted { next } else { next.trim() };
+                statement.push_str(next);
+                scanner.read(next);
             }
             output.push((index as u32 + 1, Cow::Owned(statement)));
         } else {
@@ -2134,6 +2163,20 @@ mod tests {
         }
     }
 
+    /// A comment may run over many lines, and reading it takes one pass over them, not one per
+    /// line.
+    #[test]
+    fn a_comment_of_many_lines_is_read() {
+        let body: String = (0..20_000).map(|line| format!("line {line}\n")).collect();
+        let text = format!(
+            "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 1 Node\n SG_ Value : 0|8@1+ (1,0) [0|0] \"\" Node\n\nCM_ SG_ 100 Value \"{body}\";\n"
+        );
+
+        let dbc = DBCFile::parse_str(&text).expect("a comment of many lines");
+
+        assert_eq!(dbc.sources["Node"].messages[0].signals[0].comment, body);
+    }
+
     /// A file may write its values before its definitions, or never define what it sets.
     #[test]
     fn an_attribute_is_kept_without_its_definition() {
@@ -2224,6 +2267,35 @@ mod tests {
 
         let message = &dbc.sources["Node"].messages[0];
         assert_eq!(message.signals[0].comment, "first; line\n\nsecond line");
+    }
+
+    /// A `\"` inside a quoted string is text and does not close it. The comment keeps the
+    /// backslash, as the writer writes the comment as it is.
+    #[test]
+    fn an_escaped_quote_does_not_end_a_comment() {
+        let text = "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 1 Node\n SG_ Value : 0|8@1+ (1,0) [0|0] \"\" Node\n\nCM_ SG_ 100 Value \"say \\\"hi\n\\\" twice\";\nCM_ BO_ 100 \"next\";\n";
+
+        let dbc = DBCFile::parse_str(text).expect("a comment with escaped quotes");
+
+        let message = &dbc.sources["Node"].messages[0];
+        assert_eq!(message.signals[0].comment, "say \\\"hi\n\\\" twice");
+        assert_eq!(message.comment, "next");
+    }
+
+    /// What the writer writes for a comment with an escaped quote reads back as that comment.
+    #[test]
+    fn a_comment_with_an_escaped_quote_round_trips() {
+        let text = "VERSION \"\"\n\nBU_: Node\n\nBO_ 100 Msg: 1 Node\n SG_ Value : 0|8@1+ (1,0) [0|0] \"\" Node\n";
+        let mut dbc = DBCFile::parse_str(text).expect("a file");
+        dbc.sources.get_mut("Node").unwrap().messages[0].signals[0].comment =
+            "a \\\"b\\\" c".to_string();
+
+        let read = DBCFile::parse_str(&dbc.write_string()).expect("what the writer wrote");
+
+        assert_eq!(
+            read.sources["Node"].messages[0].signals[0].comment,
+            "a \\\"b\\\" c"
+        );
     }
     use super::*;
 
