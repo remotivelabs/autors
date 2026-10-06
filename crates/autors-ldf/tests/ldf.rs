@@ -1,5 +1,6 @@
 use autors_ldf::codec::SignalValues;
 use autors_ldf::model::{EncodingValue, Ldf, ScheduleCommand, SignalValue};
+use autors_ldf::Error;
 
 const SAMPLE: &str = r#"
 // compact integration fixture
@@ -371,4 +372,58 @@ fn a_slave_without_attributes_is_refused_strictly_and_read_leniently() {
     let ldf = Ldf::parse_str_unvalidated(NODE_WITHOUT_ATTRIBUTES).unwrap();
     assert!(ldf.slaves.contains_key("ANY"));
     assert_eq!(ldf.unconditional_frames["Protected"].signals.len(), 1);
+}
+
+/// A signal placed at bit 65535 of a one-byte frame. The offset is the largest the syntax admits,
+/// so the signal's end does not fit the offset's own type.
+const FAR_PLACEMENT: &str = r#"
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Master, 5 ms, 0.1 ms;
+    Slaves: Slave;
+}
+
+Signals {
+    Sig: 8, 0, Slave, Master;
+}
+
+Frames {
+    F: 0x10, Slave, 1 {
+        Sig, 65535;
+    }
+}
+
+Node_attributes {
+    Slave {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x03;
+        initial_NAD = 0x03;
+        product_id = 0xB0, 0xB002, 0;
+    }
+}
+"#;
+
+#[test]
+fn a_placement_whose_end_does_not_fit_is_refused() {
+    let error = Ldf::parse_str(FAR_PLACEMENT).unwrap_err();
+
+    assert!(matches!(error, Error::Invalid(_)), "{error}");
+    assert!(error.to_string().contains("Sig"), "{error}");
+}
+
+/// The lenient path reads the placement as written, so the codec meets it and must answer with an
+/// error, not stop the program.
+#[test]
+fn a_frame_whose_signal_lies_outside_the_payload_does_not_encode_or_decode() {
+    let ldf = Ldf::parse_str_unvalidated(FAR_PLACEMENT).unwrap();
+
+    let error = ldf.decode_frame_raw("F", &[0]).unwrap_err();
+    assert!(matches!(error, Error::Codec(_)), "{error}");
+
+    let error = ldf.encode_frame_raw("F", &SignalValues::new()).unwrap_err();
+    assert!(matches!(error, Error::Codec(_)), "{error}");
 }

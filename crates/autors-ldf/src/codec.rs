@@ -77,7 +77,7 @@ impl Ldf {
             })?;
             values.insert(
                 signal.name.clone(),
-                read_signal(payload, placement.bit_offset, signal),
+                read_signal(payload, placement.bit_offset, signal)?,
             );
         }
         Ok(values)
@@ -265,35 +265,38 @@ fn write_signal(
     value: &SignalValue,
 ) -> Result<()> {
     let value = raw_value_for_signal(signal, value)?;
+    let bit_offset = usize::from(bit_offset);
     match value {
         SignalValue::Integer(integer) => {
             write_bits(payload, bit_offset, signal.width, integer as u64)
         }
         SignalValue::Bytes(bytes) => {
             for (index, byte) in bytes.into_iter().enumerate() {
-                write_bits(payload, bit_offset + index as u16 * 8, 8, u64::from(byte));
+                write_bits(payload, bit_offset + index * 8, 8, u64::from(byte))?;
             }
+            Ok(())
         }
         SignalValue::Float(_) | SignalValue::Text(_) => unreachable!(),
     }
-    Ok(())
 }
 
-fn read_signal(payload: &[u8], bit_offset: u16, signal: &Signal) -> SignalValue {
+fn read_signal(payload: &[u8], bit_offset: u16, signal: &Signal) -> Result<SignalValue> {
+    let bit_offset = usize::from(bit_offset);
     if signal.is_array() {
-        let mut bytes = Vec::with_capacity(usize::from(signal.width / 8));
-        for index in 0..signal.width / 8 {
-            bytes.push(read_bits(payload, bit_offset + u16::from(index) * 8, 8) as u8);
-        }
-        SignalValue::Bytes(bytes)
+        let bytes = (0..usize::from(signal.width / 8))
+            .map(|index| read_bits(payload, bit_offset + index * 8, 8).map(|byte| byte as u8))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(SignalValue::Bytes(bytes))
     } else {
-        SignalValue::Integer(read_bits(payload, bit_offset, signal.width) as i64)
+        let value = read_bits(payload, bit_offset, signal.width)?;
+        Ok(SignalValue::Integer(value as i64))
     }
 }
 
-fn write_bits(payload: &mut [u8], offset: u16, width: u8, value: u64) {
-    for index in 0..width {
-        let absolute = usize::from(offset) + usize::from(index);
+fn write_bits(payload: &mut [u8], offset: usize, width: u8, value: u64) -> Result<()> {
+    check_bits(payload, offset, width)?;
+    for index in 0..usize::from(width) {
+        let absolute = offset + index;
         let mask = 1_u8 << (absolute % 8);
         if value & (1_u64 << index) == 0 {
             payload[absolute / 8] &= !mask;
@@ -301,17 +304,31 @@ fn write_bits(payload: &mut [u8], offset: u16, width: u8, value: u64) {
             payload[absolute / 8] |= mask;
         }
     }
+    Ok(())
 }
 
-fn read_bits(payload: &[u8], offset: u16, width: u8) -> u64 {
+fn read_bits(payload: &[u8], offset: usize, width: u8) -> Result<u64> {
+    check_bits(payload, offset, width)?;
     let mut value = 0_u64;
-    for index in 0..width {
-        let absolute = usize::from(offset) + usize::from(index);
+    for index in 0..usize::from(width) {
+        let absolute = offset + index;
         if payload[absolute / 8] & (1_u8 << (absolute % 8)) != 0 {
             value |= 1_u64 << index;
         }
     }
-    value
+    Ok(value)
+}
+
+/// A document read without validation may place a signal past its frame's payload.
+fn check_bits(payload: &[u8], offset: usize, width: u8) -> Result<()> {
+    let end = offset + usize::from(width);
+    if end > payload.len() * 8 {
+        return Err(Error::Codec(format!(
+            "bits {offset}..{end} lie outside the {}-byte payload",
+            payload.len()
+        )));
+    }
+    Ok(())
 }
 
 fn encode_with(
