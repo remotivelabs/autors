@@ -1483,7 +1483,7 @@ fn validate_layout(
     }
     let mut ordered = placements.to_vec();
     ordered.sort_by_key(|placement| placement.bit_offset);
-    let mut end = 0_u16;
+    let mut end = 0_u32;
     let mut previous = None::<&str>;
     for placement in &ordered {
         let signal = signals.get(&placement.signal).ok_or_else(|| {
@@ -1492,15 +1492,16 @@ fn validate_layout(
                 placement.signal
             ))
         })?;
-        if placement.bit_offset < end {
+        let start = u32::from(placement.bit_offset);
+        if start < end {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} overlaps {}",
                 signal.name,
                 previous.unwrap_or("a previous signal")
             )));
         }
-        end = placement.bit_offset + u16::from(signal.width);
-        if end > u16::from(length) * 8 {
+        end = start + u32::from(signal.width);
+        if end > u32::from(length) * 8 {
             return Err(Error::Invalid(format!(
                 "frame {frame_name} signal {} extends beyond the payload",
                 signal.name
