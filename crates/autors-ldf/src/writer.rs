@@ -488,7 +488,7 @@ fn write_encodings(output: &mut String, ldf: &Ldf) {
         output.push_str("Signal_representation {\n");
         for (encoding, signals) in representations {
             write!(output, "    {encoding}: ").infallible();
-            write_joined(output, signals.into_iter(), ", ");
+            write_joined(output, signals, ", ");
             output.push_str(";\n");
         }
         output.push_str("}\n\n");
