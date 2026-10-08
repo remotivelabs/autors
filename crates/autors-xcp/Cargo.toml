@@ -11,7 +11,7 @@ publish.workspace = true
 [features]
 default = ["runtime-tokio", "blocking"]
 runtime-tokio = ["autors-runtime/runtime-tokio"]
-blocking = ["autors-runtime/blocking"]
+blocking = ["autors-runtime/blocking", "autors-comm/blocking"]
 
 [dependencies]
 autors-comm.workspace = true
