@@ -13,6 +13,10 @@
 //! - Return code `0` = success, non-zero = error code (see the `AUTORS_ERR_*`
 //!   constants); error details are retrieved via [`autors_last_error`]
 //!   (thread-local, overwritten by the next FFI call);
+//! - Calls taking `*const AutorsProject` or a borrowed handle only read and may
+//!   run concurrently; calls taking `*mut AutorsProject` change or free the
+//!   project and must not overlap with any other call on that project or its
+//!   borrowed handles;
 //! - Strings returned as `*mut c_char` must be freed by the caller with
 //!   [`autors_string_free`]; the pointer returned by [`autors_last_error`]
 //!   must **not** be freed.

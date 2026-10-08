@@ -20,6 +20,11 @@ internal errors. Strings returned as owned pointers must be released with
 `autors_string_free`. Borrowed measurement and characteristic handles become
 invalid when their owning project is freed or structurally modified.
 
+Calls that take a `const AutorsProject *` or a borrowed handle only read and
+may run on several threads at once. Calls that take a non-const
+`AutorsProject *` change or free the project and must not overlap with any
+other call on that project or its borrowed handles.
+
 ## Generated and example artifacts
 
 - [`include/autors.h`](include/autors.h) is generated with `cbindgen`.

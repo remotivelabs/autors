@@ -1,3 +1,10 @@
+/*
+ * Threads: calls that take a const AutorsProject * or a borrowed handle only
+ * read the project and may run on several threads at once. Calls that take a
+ * non-const AutorsProject * change or free the project and must not overlap
+ * with any other call on that project or its borrowed handles; serialize them
+ * yourself. Separate projects are independent. autors_last_error is per thread.
+ */
 typedef struct AutorsProject AutorsProject;
 typedef struct AutorsMeasurement AutorsMeasurement;
 typedef struct AutorsCharacteristic AutorsCharacteristic;

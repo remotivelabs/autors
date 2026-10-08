@@ -12,10 +12,18 @@ use crate::objects::{
 const DEFAULT_CONTAINER_SIZE: usize = 4 * 1024 * 1024;
 
 /// Resource limits applied while reading untrusted BLF input.
+///
+/// The reader allocates buffers of the sizes a file declares, up to these
+/// limits, and fails with a parse error when a file declares more. Raising a
+/// limit lets a crafted file make the reader allocate that much memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BlfReaderOptions {
+    /// Largest file header, in bytes. Default 16 MiB.
     pub max_header_size: usize,
+    /// Largest LOG_CONTAINER, both as stored and after decompression, in bytes.
+    /// Default 512 MiB.
     pub max_container_size: usize,
+    /// Largest single object other than a LOG_CONTAINER, in bytes. Default 256 MiB.
     pub max_object_size: usize,
 }
 
