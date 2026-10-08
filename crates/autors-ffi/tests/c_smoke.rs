@@ -21,7 +21,7 @@ extern "C" {
 
 #[test]
 fn c_demo_compiles_links_and_runs() {
-    let mut buf = vec![0i8; 8192];
+    let mut buf: Vec<c_char> = vec![0; 8192];
     // SAFETY: buf is an exclusively owned writable buffer whose length
     // matches the value passed in; the C side guarantees NUL termination.
     let rc = unsafe { autors_c_demo_run(buf.as_mut_ptr(), buf.len()) };
