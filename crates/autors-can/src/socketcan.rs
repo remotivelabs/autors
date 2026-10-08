@@ -8,6 +8,7 @@
 //!   (vendor driver adapters discard error frames);
 //! - remote frames have no counterpart in the shared frame model and are dropped
 //!   on receive (the same filtering applied by the Kvaser driver adapter).
+//!
 //! No hardware is available for on-target verification here; only compilation and
 //! construction-level/pure-function tests are covered.
 
