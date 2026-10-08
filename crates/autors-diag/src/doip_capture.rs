@@ -519,10 +519,7 @@ impl CaptureState {
             }
         }
 
-        loop {
-            let Some(next) = stream.next_sequence else {
-                break;
-            };
+        while let Some(next) = stream.next_sequence {
             let Some(index) = stream.pending.iter().position(|pending| {
                 sequence_cmp(pending.sequence, next) != Ordering::Greater
                     && next.wrapping_sub(pending.sequence) as usize <= pending.bytes.len()
