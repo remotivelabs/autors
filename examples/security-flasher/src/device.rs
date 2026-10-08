@@ -36,6 +36,8 @@ pub struct DeviceChoice {
     pub adapter: AdapterKind,
     pub channel: i32,
     pub hardware_type: i32,
+    // only the Windows-only Tosun adapter reads the serial
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub serial: Option<String>,
     pub supports_fd: bool,
     pub label: String,
