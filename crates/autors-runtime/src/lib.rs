@@ -133,6 +133,10 @@ impl<R> Shared<R> {
     }
 }
 
+/// Starts the work behind a [`ThreadFuture`] on its first poll.
+#[cfg(not(feature = "runtime-tokio"))]
+type StartThread<R> = Box<dyn FnOnce(Arc<Shared<R>>) + Send>;
+
 /// Future that resolves once a std thread has run `f` (or slept, for the
 /// fallback timer) and posted the value into the shared cell.
 #[cfg(not(feature = "runtime-tokio"))]
@@ -141,7 +145,7 @@ where
     R: Send + 'static,
 {
     shared: Arc<Shared<R>>,
-    start: Option<Box<dyn FnOnce(Arc<Shared<R>>) + Send>>,
+    start: Option<StartThread<R>>,
 }
 
 #[cfg(not(feature = "runtime-tokio"))]
