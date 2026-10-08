@@ -1634,5 +1634,7 @@ mod tests {
     #[test]
     fn checksum_range_overflow_errors() {
         assert!(Checksum::crc32(b"12", 1, usize::MAX).is_err());
+        assert!(Checksum::crc16(b"12", 1, usize::MAX).is_err());
+        assert!(Checksum::crc16_ccitt(b"12", 1, usize::MAX).is_err());
     }
 }
