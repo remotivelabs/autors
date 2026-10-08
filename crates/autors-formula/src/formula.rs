@@ -987,9 +987,27 @@ fn check_range(data: &[u8], from_offset: usize, end: usize) -> Result<()> {
     Ok(())
 }
 
+fn range_end(from_offset: usize, length: usize) -> Result<usize> {
+    from_offset.checked_add(length).ok_or_else(|| {
+        Error::Value(format!(
+            "checksum range at {from_offset} with length {length} overflows"
+        ))
+    })
+}
+
+fn check_word_range(data: &[u8], from_offset: usize, end: usize, word_size: usize) -> Result<()> {
+    check_range(data, from_offset, end)?;
+    if !(end - from_offset).is_multiple_of(word_size) {
+        return Err(Error::Value(format!(
+            "checksum range [{from_offset}, {end}) is not a whole number of {word_size}-byte words"
+        )));
+    }
+    Ok(())
+}
+
 impl Checksum {
     pub fn crc32(data: &[u8], from_offset: usize, length: usize) -> Result<u32> {
-        check_range(data, from_offset, from_offset.saturating_add(length))?;
+        check_range(data, from_offset, range_end(from_offset, length)?)?;
         let mut crc = u32::MAX;
         for i in from_offset..from_offset + length {
             crc = CRC32_TABLE[((crc ^ u32::from(data[i])) & 0xFF) as usize] ^ (crc >> 8);
@@ -998,7 +1016,7 @@ impl Checksum {
     }
 
     pub fn crc16(data: &[u8], from_offset: usize, length: usize) -> Result<u16> {
-        check_range(data, from_offset, from_offset.saturating_add(length))?;
+        check_range(data, from_offset, range_end(from_offset, length)?)?;
         let mut crc: u16 = 0;
         for i in from_offset..from_offset + length {
             crc = CRC16_TABLE[((crc ^ u16::from(data[i])) & 0xFF) as usize] ^ ((crc >> 8) & 0xFF);
@@ -1007,7 +1025,7 @@ impl Checksum {
     }
 
     pub fn crc16_ccitt(data: &[u8], from_offset: usize, length: usize) -> Result<u16> {
-        check_range(data, from_offset, from_offset.saturating_add(length))?;
+        check_range(data, from_offset, range_end(from_offset, length)?)?;
         let mut crc: u16 = u16::MAX;
         for &byte in data.iter().skip(from_offset).take(length) {
             let mut b = u16::from(byte) << 8;
@@ -1023,6 +1041,13 @@ impl Checksum {
         Ok(crc)
     }
 
+    /// Computes a checksum and returns it with its width in bytes.
+    ///
+    /// The ADD types sum `data[from_offset..length]`, so `length` is the end of the
+    /// range. ADD_22, ADD_24 and ADD_44 sum little-endian words and fail when that
+    /// range is not a whole number of words. The CRC types use
+    /// `data[from_offset..from_offset + length]`. CRC_8, CRC_2_16, USER_DEFINED and
+    /// NotSet are not supported and fail.
     pub fn build_checksum(
         checksum_type: ChecksumType,
         data: &[u8],
@@ -1055,7 +1080,7 @@ impl Checksum {
                 Ok((sum, 4))
             }
             ChecksumType::ADD_22 => {
-                check_range(data, from_offset, length)?;
+                check_word_range(data, from_offset, length, 2)?;
                 let mut sum: u16 = 0;
                 let mut i = from_offset;
                 while i < length {
@@ -1066,7 +1091,7 @@ impl Checksum {
                 Ok((u32::from(sum), 2))
             }
             ChecksumType::ADD_24 => {
-                check_range(data, from_offset, length)?;
+                check_word_range(data, from_offset, length, 2)?;
                 let mut sum: u32 = 0;
                 let mut i = from_offset;
                 while i < length {
@@ -1077,7 +1102,7 @@ impl Checksum {
                 Ok((sum, 4))
             }
             ChecksumType::ADD_44 => {
-                check_range(data, from_offset, length)?;
+                check_word_range(data, from_offset, length, 4)?;
                 let mut sum: u32 = 0;
                 let mut i = from_offset;
                 while i < length {
@@ -1087,15 +1112,15 @@ impl Checksum {
                 }
                 Ok((sum, 4))
             }
-            ChecksumType::CRC_8 => Ok((0, 1)),
             ChecksumType::CRC_16 => Ok((u32::from(Self::crc16(data, from_offset, length)?), 2)),
-            ChecksumType::CRC_2_16 => Ok((0, 2)),
             ChecksumType::CRC_16_CITT => {
                 Ok((u32::from(Self::crc16_ccitt(data, from_offset, length)?), 2))
             }
             ChecksumType::CRC_32 => Ok((Self::crc32(data, from_offset, length)?, 4)),
-            ChecksumType::USER_DEFINED => Ok((0, 4)),
-            ChecksumType::NotSet => Err(Error::Value(format!(
+            ChecksumType::CRC_8
+            | ChecksumType::CRC_2_16
+            | ChecksumType::USER_DEFINED
+            | ChecksumType::NotSet => Err(Error::Value(format!(
                 "checksum type not supported: {checksum_type:?}"
             ))),
         }
@@ -1580,18 +1605,34 @@ mod tests {
             Checksum::build_checksum(ChecksumType::CRC_16_CITT, b"123456789", 0, 9).unwrap(),
             (0x29B1, 2)
         );
-        assert_eq!(
-            Checksum::build_checksum(ChecksumType::CRC_8, b"abc", 0, 3).unwrap(),
-            (0, 1)
-        );
-        assert_eq!(
-            Checksum::build_checksum(ChecksumType::CRC_2_16, b"abc", 0, 3).unwrap(),
-            (0, 2)
-        );
-        assert_eq!(
-            Checksum::build_checksum(ChecksumType::USER_DEFINED, b"abc", 0, 3).unwrap(),
-            (0, 4)
-        );
-        assert!(Checksum::build_checksum(ChecksumType::NotSet, b"abc", 0, 3).is_err());
+    }
+
+    #[test]
+    fn build_checksum_rejects_unsupported_types() {
+        for checksum_type in [
+            ChecksumType::CRC_8,
+            ChecksumType::CRC_2_16,
+            ChecksumType::USER_DEFINED,
+            ChecksumType::NotSet,
+        ] {
+            assert!(
+                Checksum::build_checksum(checksum_type, b"abc", 0, 3).is_err(),
+                "{checksum_type:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_checksum_rejects_partial_words() {
+        let data = [0xFFu8, 0x01, 0x02, 0x03, 0x04];
+        assert!(Checksum::build_checksum(ChecksumType::ADD_22, &data, 0, 5).is_err());
+        assert!(Checksum::build_checksum(ChecksumType::ADD_24, &data, 1, 4).is_err());
+        assert!(Checksum::build_checksum(ChecksumType::ADD_44, &data, 0, 5).is_err());
+        assert!(Checksum::build_checksum(ChecksumType::ADD_44, &data, 1, 5).is_ok());
+    }
+
+    #[test]
+    fn checksum_range_overflow_errors() {
+        assert!(Checksum::crc32(b"12", 1, usize::MAX).is_err());
     }
 }
