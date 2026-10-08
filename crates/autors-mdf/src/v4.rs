@@ -57,6 +57,8 @@ use crate::error::{Error, Result};
 pub const MDF4_EPOCH_UNIX_SECS: u64 = 0;
 /// zlib header bytes used by DZ blocks.
 pub const ZLIB_HEADER: [u8; 2] = [120, 1];
+/// Largest uncompressed size a DZ block may declare and still be read: 512 MiB.
+pub const MAX_DZ_UNCOMPRESSED_SIZE: u64 = 512 * 1024 * 1024;
 
 fn parse_err<T>(offset: u64, message: impl Into<String>) -> Result<T> {
     Err(Error::Parse {
@@ -743,8 +745,9 @@ fn transpose(src: &[u8], a: usize, b: usize) -> Vec<u8> {
 
 /// Inflates a DZ payload into `uncompressed_size` bytes.
 ///
-/// Fails when the payload inflates to more than `uncompressed_size` bytes, so a
-/// small payload cannot expand without bound.
+/// Fails when `uncompressed_size` exceeds [`MAX_DZ_UNCOMPRESSED_SIZE`] or the
+/// payload inflates to more than `uncompressed_size` bytes, so a crafted block
+/// cannot make the reader allocate more than that limit.
 pub fn dz_decompress(
     zip_type: ZipType,
     zip_parameter: u32,
@@ -752,6 +755,11 @@ pub fn dz_decompress(
     compressed: &[u8],
 ) -> Result<Vec<u8>> {
     use std::io::Read;
+    if uncompressed_size > MAX_DZ_UNCOMPRESSED_SIZE {
+        return Err(Error::Compression(format!(
+            "DZ block declares {uncompressed_size} bytes, more than the limit of {MAX_DZ_UNCOMPRESSED_SIZE}"
+        )));
+    }
     if compressed.len() < ZLIB_HEADER.len() {
         return Err(Error::Compression(
             "DZ payload shorter than zlib header".into(),
@@ -3949,6 +3957,13 @@ mod tests {
         let data = vec![0u8; 100_000];
         let mut dz = DzBlockV4::from_uncompressed(&data, ZipType::Deflate, 0, *b"DT").unwrap();
         dz.size = 1_000;
+        assert!(dz.decompress().is_err());
+    }
+
+    #[test]
+    fn dz_decompress_rejects_declared_size_beyond_limit() {
+        let mut dz = DzBlockV4::from_uncompressed(b"abc", ZipType::Deflate, 0, *b"DT").unwrap();
+        dz.size = MAX_DZ_UNCOMPRESSED_SIZE as i64 + 1;
         assert!(dz.decompress().is_err());
     }
 
