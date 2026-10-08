@@ -741,6 +741,10 @@ fn transpose(src: &[u8], a: usize, b: usize) -> Vec<u8> {
     out
 }
 
+/// Inflates a DZ payload into `uncompressed_size` bytes.
+///
+/// Fails when the payload inflates to more than `uncompressed_size` bytes, so a
+/// small payload cannot expand without bound.
 pub fn dz_decompress(
     zip_type: ZipType,
     zip_parameter: u32,
@@ -753,10 +757,16 @@ pub fn dz_decompress(
             "DZ payload shorter than zlib header".into(),
         ));
     }
-    let mut dec = flate2::read::DeflateDecoder::new(&compressed[ZLIB_HEADER.len()..]);
+    let dec = flate2::read::DeflateDecoder::new(&compressed[ZLIB_HEADER.len()..]);
     let mut raw = Vec::new();
-    dec.read_to_end(&mut raw)
+    dec.take(uncompressed_size.saturating_add(1))
+        .read_to_end(&mut raw)
         .map_err(|e| Error::Compression(format!("deflate decode failed: {e}")))?;
+    if raw.len() as u64 > uncompressed_size {
+        return Err(Error::Compression(format!(
+            "DZ payload inflates to more than its declared {uncompressed_size} bytes"
+        )));
+    }
     match zip_type {
         ZipType::Deflate => Ok(raw),
         ZipType::TransposeAndDeflate => {
@@ -2971,12 +2981,10 @@ impl DzBlockV4 {
     }
 
     pub fn decompress(&self) -> Result<Vec<u8>> {
-        dz_decompress(
-            self.zip_type,
-            self.zip_parameter,
-            self.size as u64,
-            &self.data,
-        )
+        let size = u64::try_from(self.size).map_err(|_| {
+            Error::Compression(format!("DZ block declares a negative size {}", self.size))
+        })?;
+        dz_decompress(self.zip_type, self.zip_parameter, size, &self.data)
     }
 
     pub fn write_block(&self, w: &mut Vec<u8>) -> Result<u64> {
@@ -3934,6 +3942,21 @@ mod tests {
         let back = DzBlockV4::parse(&w, 0).unwrap();
         assert_eq!(back, dz);
         assert_eq!(back.decompress().unwrap(), data);
+    }
+
+    #[test]
+    fn dz_decompress_rejects_output_beyond_declared_size() {
+        let data = vec![0u8; 100_000];
+        let mut dz = DzBlockV4::from_uncompressed(&data, ZipType::Deflate, 0, *b"DT").unwrap();
+        dz.size = 1_000;
+        assert!(dz.decompress().is_err());
+    }
+
+    #[test]
+    fn dz_decompress_rejects_negative_size() {
+        let mut dz = DzBlockV4::from_uncompressed(b"abc", ZipType::Deflate, 0, *b"DT").unwrap();
+        dz.size = -1;
+        assert!(dz.decompress().is_err());
     }
 
     #[test]
