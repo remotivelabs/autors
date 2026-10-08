@@ -618,6 +618,7 @@ impl CanDevice for PeakCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Sending on an unopened channel returns 0.
         if self.handle == INVALID_HANDLE {
             return Ok(0);

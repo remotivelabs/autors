@@ -260,6 +260,7 @@ impl CanDevice for SocketCanDevice {
 
     /// Sends a frame; returns `Ok(0)` when the device is not opened.
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         let socket = match &self.socket {
             Some(socket) => socket,
             None => return Ok(0),
@@ -371,6 +372,12 @@ mod tests {
         );
         assert!(autors_runtime::block_on(p.receive()).unwrap().is_none());
         assert!(autors_runtime::block_on(p.poll_error()).unwrap().is_none());
+    }
+
+    #[test]
+    fn send_refuses_standard_id_beyond_11_bits() {
+        let mut p = SocketCanDevice::new();
+        assert!(autors_runtime::block_on(p.send(0x1_0123, &[1], FrameType::CAN20B)).is_err());
     }
 
     #[test]

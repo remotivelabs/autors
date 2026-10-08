@@ -1126,6 +1126,7 @@ impl CanDevice for IxxatCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Sending while not open returns 0.
         if self.channel == 0 {
             return Ok(0);

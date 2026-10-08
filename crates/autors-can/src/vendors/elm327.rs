@@ -744,6 +744,7 @@ impl<IO: Elm327Io + Send> CanDevice for Elm327Can<IO> {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Not open -> 0; the FrameType parameter is not used by the engine
         // (ELM327 is classic CAN only, statistic frames are fixed CAN20B).
         if !self.opened {

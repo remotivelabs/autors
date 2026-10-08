@@ -687,6 +687,7 @@ impl CanDevice for EbElCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Not open: return 0 without calling the driver.
         if !self.opened {
             return Ok(0);

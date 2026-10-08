@@ -446,6 +446,7 @@ impl CanDevice for NiCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // When the channel is not open, send returns 0. NI-CAN is classic CAN
         // only, so frame_type does not affect the TX path; it is only used
         // for the sent-frame record.

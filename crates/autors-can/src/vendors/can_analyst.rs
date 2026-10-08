@@ -539,6 +539,7 @@ impl CanDevice for CanAnalystCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // The FrameType parameter is unused (classic CAN only).
         // Payloads over 8 bytes: record LastError and return 0 (no error raised).
         if data.len() > 8 {

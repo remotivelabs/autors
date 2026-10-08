@@ -370,6 +370,7 @@ impl CanDevice for LawicelCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // FrameType is ignored: the hardware is CAN 2.0A/B only (the CANMsg
         // struct has no FD fields).
         let _ = frame_type;

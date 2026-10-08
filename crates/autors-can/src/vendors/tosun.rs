@@ -1056,6 +1056,7 @@ impl CanDevice for TosunCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // The send path is serialized by `&mut self`.
         let (native_id, raw_id, extended) = normalize_can_id(can_id);
         let is_fd = frame_type.contains(FrameType::FD);

@@ -1025,6 +1025,7 @@ impl CanDevice for EtasCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         if !self.is_open() || self.tx_queue_handle == -1 {
             return Ok(0);
         }

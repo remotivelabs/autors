@@ -587,6 +587,7 @@ impl CanDevice for EsdCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // When not open, send returns 0 without an error.
         if self.handle == 0 {
             return Ok(0);

@@ -464,6 +464,7 @@ impl CanDevice for KvaserCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Returns 0 when the channel is not open.
         if self.handle < 0 {
             return Ok(0);

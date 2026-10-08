@@ -187,6 +187,15 @@ pub fn is_can_id_valid(id: u32) -> bool {
     }
 }
 
+/// Fails with [`Error::Invalid`] unless `id` is a valid CAN ID under the library's encoding.
+pub fn check_can_id(id: u32) -> Result<()> {
+    if is_can_id_valid(id) {
+        Ok(())
+    } else {
+        Err(Error::Invalid(format!("invalid CAN ID {id:#X}")))
+    }
+}
+
 /// Packs up to 8 bytes little-endian into a `u64` (input longer than 8 bytes
 /// is truncated).
 pub fn data_from_array(data: &[u8]) -> u64 {
@@ -410,6 +419,7 @@ pub trait CanDevice {
     async fn close(&mut self);
 
     /// Sends a frame; returns the number of payload bytes actually sent.
+    /// Fails with [`Error::Invalid`] when `can_id` is not a valid CAN ID.
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize>;
 
     /// Non-blocking receive of one frame (`Ok(None)` when none is pending).
@@ -472,7 +482,7 @@ pub trait CanDevice {
     }
 
     /// Sends with length padding: the ID is masked with
-    /// [`CAN_ID_LIBRARY_VALID_MASK`], short payloads are padded with
+    /// [`CAN_ID_LIBRARY_VALID_MASK`] and must then be a valid CAN ID, short payloads are padded with
     /// `fill_byte` up to the target DLC, and the result is `Ok(0)` when the
     /// actual sent length differs from the buffer length, otherwise
     /// `data.len()`.
@@ -497,9 +507,9 @@ pub trait CanDevice {
         } else {
             FrameType::FD_BRS
         };
-        let sent = self
-            .send(can_id & CAN_ID_LIBRARY_VALID_MASK, &buf, frame_type)
-            .await?;
+        let can_id = can_id & CAN_ID_LIBRARY_VALID_MASK;
+        check_can_id(can_id)?;
+        let sent = self.send(can_id, &buf, frame_type).await?;
         Ok(if sent != buf.len() { 0 } else { data.len() })
     }
 
@@ -739,6 +749,23 @@ mod tests {
         // Send failure (returns 0) -> send_msg returns 0.
         p.close();
         assert_eq!(p.send_msg(0x123, &[1, 2], true, 0, 0).unwrap(), 0);
+    }
+
+    #[test]
+    fn send_msg_refuses_standard_id_beyond_11_bits() {
+        let mut p = BlockingDevice::new(MockDevice::new());
+        p.open(CanConfiguration::default()).unwrap();
+        assert!(p.send_msg(0x800, &[1], true, 0, 0).is_err());
+        assert!(p.send_msg(0x1_0123, &[1], true, 0, 0).is_err());
+        assert!(p.0.sent.is_empty());
+    }
+
+    #[test]
+    fn check_can_id_follows_library_encoding() {
+        assert!(check_can_id(0x7FF).is_ok());
+        assert!(check_can_id(0x800).is_err());
+        assert!(check_can_id(CAN_EXT_FLAG | CAN_EXT_ID_MASK).is_ok());
+        assert!(check_can_id(CAN_EXT_FLAG | 0x2000_0000).is_err());
     }
 
     #[cfg(feature = "blocking")]

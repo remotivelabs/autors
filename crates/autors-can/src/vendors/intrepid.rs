@@ -604,6 +604,7 @@ impl CanDevice for IntrepidCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Returns 0 when the device is not open.
         if !self.opened {
             return Ok(0);

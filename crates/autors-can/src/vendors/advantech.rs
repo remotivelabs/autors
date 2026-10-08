@@ -439,6 +439,7 @@ impl CanDevice for AdvantechCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Not open -> return 0. The FrameType parameter is ignored entirely
         // (classic CAN device; wire frames always carry 8 data bytes).
         if self.handle == INVALID_HANDLE {

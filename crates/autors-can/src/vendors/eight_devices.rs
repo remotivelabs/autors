@@ -434,6 +434,7 @@ impl CanDevice for EightDevicesCan {
     }
 
     async fn send(&mut self, can_id: u32, data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         // Sending on a channel that is not open (not activated) returns 0.
         if self.handle < 0 {
             return Ok(0);
