@@ -46,7 +46,8 @@ impl CanDevice for StubDevice {
 
     async fn close(&mut self) {}
 
-    async fn send(&mut self, _can_id: u32, _data: &[u8], _frame_type: FrameType) -> Result<usize> {
+    async fn send(&mut self, can_id: u32, _data: &[u8], _frame_type: FrameType) -> Result<usize> {
+        crate::device::check_can_id(can_id)?;
         Err(Self::not_supported())
     }
 
@@ -81,6 +82,10 @@ mod tests {
         match autors_runtime::block_on(p.send(0x123, &[1], FrameType::CAN20B)) {
             Err(Error::NotSupported(_)) => {}
             other => panic!("expected NotSupported, got {other:?}"),
+        }
+        match autors_runtime::block_on(p.send(0x800, &[1], FrameType::CAN20B)) {
+            Err(Error::Invalid(_)) => {}
+            other => panic!("expected Invalid, got {other:?}"),
         }
         match autors_runtime::block_on(p.receive()) {
             Err(Error::NotSupported(_)) => {}

@@ -751,21 +751,31 @@ mod tests {
         assert_eq!(p.send_msg(0x123, &[1, 2], true, 0, 0).unwrap(), 0);
     }
 
+    #[cfg(feature = "blocking")]
     #[test]
     fn send_msg_refuses_standard_id_beyond_11_bits() {
         let mut p = BlockingDevice::new(MockDevice::new());
         p.open(CanConfiguration::default()).unwrap();
-        assert!(p.send_msg(0x800, &[1], true, 0, 0).is_err());
-        assert!(p.send_msg(0x1_0123, &[1], true, 0, 0).is_err());
+        assert!(matches!(
+            p.send_msg(0x800, &[1], true, 0, 0),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            p.send_msg(0x1_0123, &[1], true, 0, 0),
+            Err(Error::Invalid(_))
+        ));
         assert!(p.0.sent.is_empty());
     }
 
     #[test]
     fn check_can_id_follows_library_encoding() {
         assert!(check_can_id(0x7FF).is_ok());
-        assert!(check_can_id(0x800).is_err());
+        assert!(matches!(check_can_id(0x800), Err(Error::Invalid(_))));
         assert!(check_can_id(CAN_EXT_FLAG | CAN_EXT_ID_MASK).is_ok());
-        assert!(check_can_id(CAN_EXT_FLAG | 0x2000_0000).is_err());
+        assert!(matches!(
+            check_can_id(CAN_EXT_FLAG | 0x2000_0000),
+            Err(Error::Invalid(_))
+        ));
     }
 
     #[cfg(feature = "blocking")]

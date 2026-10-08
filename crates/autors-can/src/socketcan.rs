@@ -377,7 +377,10 @@ mod tests {
     #[test]
     fn send_refuses_standard_id_beyond_11_bits() {
         let mut p = SocketCanDevice::new();
-        assert!(autors_runtime::block_on(p.send(0x1_0123, &[1], FrameType::CAN20B)).is_err());
+        assert!(matches!(
+            autors_runtime::block_on(p.send(0x1_0123, &[1], FrameType::CAN20B)),
+            Err(Error::Invalid(_))
+        ));
     }
 
     #[test]
