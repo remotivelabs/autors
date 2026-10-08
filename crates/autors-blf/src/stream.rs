@@ -13,9 +13,12 @@ const DEFAULT_CONTAINER_SIZE: usize = 4 * 1024 * 1024;
 
 /// Resource limits applied while reading untrusted BLF input.
 ///
-/// The reader allocates buffers of the sizes a file declares, up to these
-/// limits, and fails with a parse error when a file declares more. Raising a
-/// limit lets a crafted file make the reader allocate that much memory.
+/// The reader allocates buffers of the sizes a file declares and fails with a
+/// parse error when a file declares more than these limits. Each limit caps a
+/// single buffer, not the reader's total memory: while a LOG_CONTAINER is
+/// decoded, its stored bytes, its decompressed data and the pending object data
+/// are held at once, so a crafted file can make the reader use about three times
+/// `max_container_size`. Raise a limit only for input you trust.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BlfReaderOptions {
     /// Largest file header, in bytes. Default 16 MiB.
