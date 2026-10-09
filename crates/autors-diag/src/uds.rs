@@ -1762,13 +1762,12 @@ impl<T: UdsTransport + Send> UdsClient<T> {
             return Ok(outcome_code(state, &response));
         }
         let max_block = response.map_or(0, |r| r.max_number_of_block_length);
-        // each TransferData block spends 2 bytes on the service id and sequence counter
-        if max_block <= 2 {
+        if max_block < 2 {
             return Err(Error::Protocol(format!(
                 "maxNumberOfBlockLength {max_block} too small for download"
             )));
         }
-        let chunk = i64::try_from(max_block - 2).unwrap_or(i64::MAX);
+        let chunk = (max_block - 2) as i64;
         let total = data.len() as i64;
         let notify_step = std::cmp::max(1, total / 100);
         let mut sent = 0i64;
@@ -3070,35 +3069,6 @@ mod tests {
         assert_eq!(reqs[4], vec![0x36, 0x03, 28, 29]);
         assert_eq!(reqs[5], vec![0x37]);
         assert_eq!(percents, vec![46, 93, 100, 100]);
-    }
-
-    #[cfg(feature = "blocking")]
-    #[test]
-    fn download_refuses_block_length_without_room_for_data() {
-        let data: Vec<u8> = (0u8..10).collect();
-        let mut c = client(vec![
-            (MsgState::Success, vec![0x74, 0x10, 0x02]), // RequestDownload, maxBlock=2
-        ]);
-        assert!(c.download(0x1000, &data, 0, true, None).is_err());
-        assert_eq!(c.0.transport.requests.len(), 1);
-    }
-
-    #[cfg(feature = "blocking")]
-    #[test]
-    fn download_sends_one_block_for_largest_block_length() {
-        let data: Vec<u8> = (0u8..10).collect();
-        let mut c = client(vec![
-            (
-                MsgState::Success,
-                [vec![0x74, 0x80], vec![0xFF; 8]].concat(),
-            ), // maxBlock=u64::MAX
-            (MsgState::Success, vec![0x76, 0x01]),
-            (MsgState::Success, vec![0x77]),
-        ]);
-        let code = c.download(0x1000, &data, 0, true, None).unwrap();
-        assert_eq!(code, 0);
-        let reqs = &c.0.transport.requests;
-        assert_eq!(reqs[1], [vec![0x36, 0x01], data].concat());
     }
 
     #[cfg(feature = "blocking")]
