@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    # Only the crates this fork changes and uses; the rest of the workspace is upstream's.
+    - name: Formatting check
+      run: cargo fmt -p autors-dbc -p autors-ldf --check
+
+    - name: Lint
+      run: cargo clippy -p autors-dbc -p autors-ldf --all-targets --locked -- -D warnings
+
+    - name: Run tests
+      run: cargo test -p autors-dbc -p autors-ldf --locked
