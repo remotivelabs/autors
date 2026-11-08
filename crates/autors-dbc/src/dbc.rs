@@ -6,7 +6,9 @@
 //! and comments (`CM_`).
 //! Parsing is deliberately lenient: unrecognized or malformed lines are
 //! skipped, and errors are only reported where recovery is impossible
-//! (invalid numbers, unterminated multi-line statements). Writing aims to be
+//! (unterminated statements or quoted strings). A statement of a keyword this
+//! parser reads that is left out of the model is listed in
+//! `DBCFile::skipped`, with its line and why. Writing aims to be
 //! byte-stable so that parse → write round-trips do not churn files.
 //! Notable format details:
 //! - Node and environment variable attribute assignments (`BA_ ... BU_` /
@@ -1090,6 +1092,30 @@ pub struct DBCFile {
     pub attribute_definitions: BTreeMap<String, AttribDefType>,
     pub signal_groups: IndexMap<String, SignalGroupType>,
     pub attributes: IndexMap<String, AttributeType>,
+    /// The statements `parse_str` read past, in file order. Not written.
+    pub skipped: Vec<Skipped>,
+}
+
+/// A statement `DBCFile::parse_str` read past: nothing of it is in the model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    /// Line where the statement starts.
+    pub line: u32,
+    /// The statement's keyword, such as `BO_` or `CM_`.
+    pub keyword: String,
+    /// Why it was read past.
+    pub reason: SkipReason,
+}
+
+/// Why a statement was read past.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipReason {
+    /// The statement lacks the form its keyword needs: a field is missing, a number does not
+    /// parse or does not fit, a target keyword is not one the statement can name.
+    Unreadable,
+    /// It names a node, message, signal, environment variable or attribute definition the file
+    /// does not declare, or a signal comes before any message.
+    NoSuchObject,
 }
 
 impl DBCFile {
@@ -1130,78 +1156,98 @@ impl DBCFile {
                 }
             }
             let (keyword, rest) = split_keyword(line);
-            match keyword {
-                "VERSION" => file.version = trim_qs(rest.trim()).to_string(),
-                "NS_" => {
-                    in_ns = true;
-                    if !trim_kws(rest).is_empty() {
-                        file.ns.push("NS_".to_string());
+            let read: Read =
+                match keyword {
+                    "VERSION" => {
+                        file.version = trim_qs(rest.trim()).to_string();
+                        Ok(())
                     }
-                }
-                "BS_" => in_ns = false,
-                "BU_" => {
-                    for name in trim_kws(rest).split_whitespace() {
-                        file.sources.insert(name.to_string(), SourceType::new(name));
+                    "NS_" => {
+                        in_ns = true;
+                        if !trim_kws(rest).is_empty() {
+                            file.ns.push("NS_".to_string());
+                        }
+                        Ok(())
                     }
-                }
-                "BO_" => {
-                    if let Some(message) = parse_message(rest) {
-                        let source_name = message.source.clone();
-                        let source = file
-                            .sources
-                            .entry(source_name.clone())
-                            .or_insert_with(|| SourceType::new(&source_name));
-                        let message_index = source.messages.len();
-                        message_locations
-                            .entry(message.id)
-                            .or_insert_with(|| (source_name.clone(), message_index));
-                        source.messages.push(message);
-                        current_message = Some((source_name, message_index));
+                    "BS_" => {
+                        in_ns = false;
+                        Ok(())
                     }
-                }
-                "SG_" => {
-                    if let (Some((source_name, message_index)), Some(signal)) =
-                        (current_message.as_ref(), parse_signal(rest))
-                    {
-                        if let Some(message) = file
-                            .sources
-                            .get_mut(source_name)
-                            .and_then(|source| source.messages.get_mut(*message_index))
-                        {
-                            message.add_signal(signal);
+                    "BU_" => {
+                        for name in trim_kws(rest).split_whitespace() {
+                            file.sources.insert(name.to_string(), SourceType::new(name));
+                        }
+                        Ok(())
+                    }
+                    "BO_" => {
+                        if let Some(message) = parse_message(rest) {
+                            let source_name = message.source.clone();
+                            let source = file
+                                .sources
+                                .entry(source_name.clone())
+                                .or_insert_with(|| SourceType::new(&source_name));
+                            let message_index = source.messages.len();
+                            message_locations
+                                .entry(message.id)
+                                .or_insert_with(|| (source_name.clone(), message_index));
+                            source.messages.push(message);
+                            current_message = Some((source_name, message_index));
+                            Ok(())
+                        } else {
+                            Err(SkipReason::Unreadable)
                         }
                     }
-                }
-                "EV_" => {
-                    if let Some(environment) = parse_environment(rest) {
-                        file.environments
-                            .insert(environment.name.clone(), environment);
-                    }
-                }
-                "VAL_TABLE_" => {
-                    if let Some(table) = parse_value_table(rest) {
-                        file.value_tables.insert(table.name.clone(), table);
-                    }
-                }
-                "BA_DEF_" | "BA_DEF_REL_" => {
-                    if let Some(definition) = parse_attribute_definition(rest) {
-                        file.attribute_definitions
-                            .insert(definition.name.clone(), definition);
-                    }
-                }
-                "BA_DEF_DEF_" | "BA_DEF_DEF_REL_" => {
-                    parse_attribute_default(&mut file, rest);
-                }
-                "BA_" => parse_attribute(&mut file, &message_locations, rest),
-                "CM_" => parse_comment(&mut file, &message_locations, rest),
-                "VAL_" => parse_signal_values(&mut file, &message_locations, rest),
-                "SIG_GROUP_" => {
-                    if let Some(group) = parse_signal_group(rest) {
-                        file.signal_groups.insert(group.name.clone(), group);
-                    }
-                }
-                "SIG_VALTYPE_" => parse_signal_float_type(&mut file, &message_locations, rest),
-                _ => {}
+                    "SG_" => match parse_signal(rest) {
+                        None => Err(SkipReason::Unreadable),
+                        Some(signal) => match current_message.as_ref().and_then(
+                            |(source_name, message_index)| {
+                                file.sources
+                                    .get_mut(source_name)
+                                    .and_then(|source| source.messages.get_mut(*message_index))
+                            },
+                        ) {
+                            Some(message) => {
+                                message.add_signal(signal);
+                                Ok(())
+                            }
+                            None => Err(SkipReason::NoSuchObject),
+                        },
+                    },
+                    "EV_" => parse_environment(rest)
+                        .map(|environment| {
+                            file.environments
+                                .insert(environment.name.clone(), environment);
+                        })
+                        .ok_or(SkipReason::Unreadable),
+                    "VAL_TABLE_" => parse_value_table(rest)
+                        .map(|table| {
+                            file.value_tables.insert(table.name.clone(), table);
+                        })
+                        .ok_or(SkipReason::Unreadable),
+                    "BA_DEF_" | "BA_DEF_REL_" => parse_attribute_definition(rest)
+                        .map(|definition| {
+                            file.attribute_definitions
+                                .insert(definition.name.clone(), definition);
+                        })
+                        .ok_or(SkipReason::Unreadable),
+                    "BA_DEF_DEF_" | "BA_DEF_DEF_REL_" => parse_attribute_default(&mut file, rest),
+                    "BA_" => parse_attribute(&mut file, &message_locations, rest),
+                    "CM_" => parse_comment(&mut file, &message_locations, rest),
+                    "VAL_" => parse_signal_values(&mut file, &message_locations, rest),
+                    "SIG_GROUP_" => parse_signal_group(rest)
+                        .map(|group| {
+                            file.signal_groups.insert(group.name.clone(), group);
+                        })
+                        .ok_or(SkipReason::Unreadable),
+                    "SIG_VALTYPE_" => parse_signal_float_type(&mut file, &message_locations, rest),
+                    _ => Ok(()),
+                };
+            if let Err(reason) = read {
+                file.skipped.push(Skipped {
+                    line: line_no,
+                    keyword: keyword.to_string(),
+                    reason,
+                });
             }
 
             if statement_has_unterminated_quote(line) {
@@ -1831,32 +1877,37 @@ fn parse_attribute_definition(rest: &str) -> Option<AttribDefType> {
     Some(definition)
 }
 
-fn parse_attribute_default(file: &mut DBCFile, rest: &str) {
+/// Whether a statement went into the model, or why not.
+type Read = std::result::Result<(), SkipReason>;
+
+fn parse_attribute_default(file: &mut DBCFile, rest: &str) -> Read {
     let mut cursor = Cur::new(rest);
     cursor.skip_ws();
-    let Some(name) = cursor.quoted() else {
-        return;
-    };
+    let name = cursor.quoted().ok_or(SkipReason::Unreadable)?;
     cursor.skip_ws();
     let value = trim_qs(cursor.rest().trim()).to_string();
-    if let Some(definition) = file.attribute_definitions.get_mut(name) {
-        definition.default_value = Some(match definition.data_type {
-            AttribDefValueType::Str | AttribDefValueType::Enum => AttribDefault::Text(value),
-            _ => AttribDefault::Number(value.parse().unwrap_or(0.0)),
-        });
-    }
+    let definition = file
+        .attribute_definitions
+        .get_mut(name)
+        .ok_or(SkipReason::NoSuchObject)?;
+    definition.default_value = Some(match definition.data_type {
+        AttribDefValueType::Str | AttribDefValueType::Enum => AttribDefault::Text(value),
+        _ => AttribDefault::Number(value.parse().unwrap_or(0.0)),
+    });
+    Ok(())
 }
 
 fn parse_attribute(
     file: &mut DBCFile,
     message_locations: &HashMap<u32, (String, usize)>,
     rest: &str,
-) {
+) -> Read {
     let mut cursor = Cur::new(rest);
     cursor.skip_ws();
-    let Some(name) = cursor.quoted().map(str::to_string) else {
-        return;
-    };
+    let name = cursor
+        .quoted()
+        .map(str::to_string)
+        .ok_or(SkipReason::Unreadable)?;
     // The definition is not required here: a file may write its values before its definitions, or
     // never define an attribute it sets, and the value is worth keeping either way. An `ENUM`
     // index is resolved later, by `AttributeType::display`, which takes the definition.
@@ -1895,129 +1946,129 @@ fn parse_attribute(
         .as_deref()
         .and_then(AttribDefObjectType::from_keyword)
         .unwrap_or(object_type);
-    match (object_type, target_keyword.as_deref()) {
-        (AttribDefObjectType::Network, _) => {
-            if let Some(value) = read_value(&mut cursor) {
-                file.attributes
-                    .insert(name.clone(), AttributeType::new(name, value));
-            }
-        }
+    let attributes = match (object_type, target_keyword.as_deref()) {
+        (AttribDefObjectType::Network, _) => &mut file.attributes,
         (AttribDefObjectType::Bu, Some("BU_")) => {
             let node = cursor.token().to_string();
-            if let Some(value) = read_value(&mut cursor) {
-                if let Some(source) = file.sources.get_mut(&node) {
-                    source
-                        .attributes
-                        .insert(name.clone(), AttributeType::new(name, value));
-                }
-            }
+            &mut file
+                .sources
+                .get_mut(&node)
+                .ok_or(SkipReason::NoSuchObject)?
+                .attributes
         }
         (AttribDefObjectType::Bo, Some("BO_")) => {
-            let id = cursor.digits().parse().ok();
-            if let (Some(id), Some(value)) = (id, read_value(&mut cursor)) {
-                if let Some(message) = find_message_mut(file, message_locations, id) {
-                    message
-                        .attributes
-                        .insert(name.clone(), AttributeType::new(name, value));
-                }
-            }
+            let id = cursor
+                .digits()
+                .parse()
+                .map_err(|_| SkipReason::Unreadable)?;
+            &mut find_message_mut(file, message_locations, id)
+                .ok_or(SkipReason::NoSuchObject)?
+                .attributes
         }
         (AttribDefObjectType::Sg, Some("SG_")) => {
-            let id = cursor.digits().parse().ok();
+            let id = cursor
+                .digits()
+                .parse()
+                .map_err(|_| SkipReason::Unreadable)?;
             cursor.skip_ws();
             let signal_name = cursor.token().to_string();
-            if let (Some(id), Some(value)) = (id, read_value(&mut cursor)) {
-                if let Some(signal) = find_signal_mut(file, message_locations, id, &signal_name) {
-                    signal
-                        .attributes
-                        .insert(name.clone(), AttributeType::new(name, value));
-                }
-            }
+            &mut find_signal_mut(file, message_locations, id, &signal_name)
+                .ok_or(SkipReason::NoSuchObject)?
+                .attributes
         }
         (AttribDefObjectType::Ev, Some("EV_")) => {
             let environment_name = cursor.token().to_string();
-            if let Some(value) = read_value(&mut cursor) {
-                if let Some(environment) = file.environments.get_mut(&environment_name) {
-                    environment
-                        .attributes
-                        .insert(name.clone(), AttributeType::new(name, value));
-                }
-            }
+            &mut file
+                .environments
+                .get_mut(&environment_name)
+                .ok_or(SkipReason::NoSuchObject)?
+                .attributes
         }
-        _ => {}
-    }
+        _ => return Err(SkipReason::Unreadable),
+    };
+    let value = read_value(&mut cursor).ok_or(SkipReason::Unreadable)?;
+    attributes.insert(name.clone(), AttributeType::new(name, value));
+    Ok(())
 }
 
 fn parse_comment(
     file: &mut DBCFile,
     message_locations: &HashMap<u32, (String, usize)>,
     rest: &str,
-) {
+) -> Read {
     let rest = rest.trim();
     if let Some(value) = rest.strip_prefix('"') {
         file.comment = trim_qs(value).to_string();
-        return;
+        return Ok(());
     }
     let mut cursor = Cur::new(rest);
     let target = cursor.token();
     cursor.skip_ws();
-    match target {
+    let comment = match target {
         "BU_" => {
             let name = cursor.token().to_string();
             cursor.skip_ws();
-            if let (Some(source), Some(comment)) = (file.sources.get_mut(&name), cursor.quoted()) {
-                source.comment = comment.to_string();
-            }
+            &mut file
+                .sources
+                .get_mut(&name)
+                .ok_or(SkipReason::NoSuchObject)?
+                .comment
         }
         "BO_" => {
-            let id = cursor.digits().parse().ok();
+            let id = cursor
+                .digits()
+                .parse()
+                .map_err(|_| SkipReason::Unreadable)?;
             cursor.skip_ws();
-            if let (Some(id), Some(comment)) = (id, cursor.quoted()) {
-                if let Some(message) = find_message_mut(file, message_locations, id) {
-                    message.comment = comment.to_string();
-                }
-            }
+            &mut find_message_mut(file, message_locations, id)
+                .ok_or(SkipReason::NoSuchObject)?
+                .comment
         }
         "SG_" => {
-            let id = cursor.digits().parse().ok();
+            let id = cursor
+                .digits()
+                .parse()
+                .map_err(|_| SkipReason::Unreadable)?;
             cursor.skip_ws();
             let name = cursor.token().to_string();
             cursor.skip_ws();
-            if let (Some(id), Some(comment)) = (id, cursor.quoted()) {
-                if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
-                    signal.comment = comment.to_string();
-                }
-            }
+            &mut find_signal_mut(file, message_locations, id, &name)
+                .ok_or(SkipReason::NoSuchObject)?
+                .comment
         }
         "EV_" => {
             let name = cursor.token().to_string();
             cursor.skip_ws();
-            if let (Some(environment), Some(comment)) =
-                (file.environments.get_mut(&name), cursor.quoted())
-            {
-                environment.comment = comment.to_string();
-            }
+            &mut file
+                .environments
+                .get_mut(&name)
+                .ok_or(SkipReason::NoSuchObject)?
+                .comment
         }
-        _ => {}
-    }
+        _ => return Err(SkipReason::Unreadable),
+    };
+    *comment = cursor.quoted().ok_or(SkipReason::Unreadable)?.to_string();
+    Ok(())
 }
 
 fn parse_signal_values(
     file: &mut DBCFile,
     message_locations: &HashMap<u32, (String, usize)>,
     rest: &str,
-) {
+) -> Read {
     let mut cursor = Cur::new(rest);
-    let Some(id) = cursor.digits().parse().ok() else {
-        return;
-    };
+    let id = cursor
+        .digits()
+        .parse()
+        .map_err(|_| SkipReason::Unreadable)?;
     cursor.skip_ws();
     let name = cursor.token().to_string();
     cursor.skip_ws();
     let values = quoted_pairs(cursor.rest());
-    if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
-        signal.enums = Some(values);
-    }
+    find_signal_mut(file, message_locations, id, &name)
+        .ok_or(SkipReason::NoSuchObject)?
+        .enums = Some(values);
+    Ok(())
 }
 
 fn parse_signal_group(rest: &str) -> Option<SignalGroupType> {
@@ -2048,11 +2099,12 @@ fn parse_signal_float_type(
     file: &mut DBCFile,
     message_locations: &HashMap<u32, (String, usize)>,
     rest: &str,
-) {
+) -> Read {
     let mut cursor = Cur::new(rest);
-    let Some(id) = cursor.digits().parse().ok() else {
-        return;
-    };
+    let id = cursor
+        .digits()
+        .parse()
+        .map_err(|_| SkipReason::Unreadable)?;
     cursor.skip_ws();
     let name = cursor.token_no_colon().to_string();
     cursor.skip_ws();
@@ -2061,11 +2113,12 @@ fn parse_signal_float_type(
     let float_type = match cursor.digits() {
         "1" => SignalFloatType::IeeeFloat32,
         "2" => SignalFloatType::IeeeFloat64,
-        _ => return,
+        _ => return Err(SkipReason::Unreadable),
     };
-    if let Some(signal) = find_signal_mut(file, message_locations, id, &name) {
-        signal.set_float_type(float_type);
-    }
+    find_signal_mut(file, message_locations, id, &name)
+        .ok_or(SkipReason::NoSuchObject)?
+        .set_float_type(float_type);
+    Ok(())
 }
 
 fn find_message_mut<'a>(
@@ -2113,6 +2166,32 @@ mod tests {
             let names: Vec<_> = signals.iter().map(|signal| signal.name.as_str()).collect();
             assert_eq!(names, ["Value"], "a signal with a broken {field}");
         }
+    }
+
+    /// Each statement read past is listed with its line, its keyword and why, so a reader can
+    /// say what the file lost; a statement that went into the model is not listed.
+    #[test]
+    fn a_statement_read_past_is_listed_with_its_line_and_why() {
+        let text = "VERSION \"\"\n\nBU_: Node\n\n SG_ Early : 0|8@1+ (1,0) [0|255] \"\" Node\nBO_ 100 Msg: 2 Node\n SG_ Value : 0|8@1+ (1,0) [0|255] \"\" Node\nBO_ 4294967296 TooBig: 8 Node\nCM_ BO_ 999 \"no such message\";\nCM_ SG_ 100 Value \"kept\";\nVAL_ 100 Missing 0 \"Off\" ;\nBA_DEF_DEF_ \"Undefined\" 0;\n";
+
+        let dbc = DBCFile::parse_str(text).expect("the file itself is well formed");
+
+        let skipped: Vec<_> = dbc
+            .skipped
+            .iter()
+            .map(|skip| (skip.line, skip.keyword.as_str(), skip.reason))
+            .collect();
+        assert_eq!(
+            skipped,
+            [
+                (5, "SG_", SkipReason::NoSuchObject),
+                (8, "BO_", SkipReason::Unreadable),
+                (9, "CM_", SkipReason::NoSuchObject),
+                (11, "VAL_", SkipReason::NoSuchObject),
+                (12, "BA_DEF_DEF_", SkipReason::NoSuchObject),
+            ]
+        );
+        assert_eq!(dbc.sources["Node"].messages[0].signals[0].comment, "kept");
     }
 
     /// An environment variable whose number does not parse is dropped, not read as zero.
